@@ -1,12 +1,12 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
-from datetime import datetime
+from datetime import datetime, timedelta  # timedelta 임포트 추가
 import requests
 from bs4 import BeautifulSoup as bs
-import pandas as pd
+import json
+import os
 import re
-import time
 
 # S3 업로드 작업을 위한 함수
 def upload_to_s3(filename: str, key: str, bucket_name: str) -> None:
@@ -55,64 +55,90 @@ def parse_date(created_at):
         raise ValueError(f"Unknown date format: {created_at}")
 
 # 웹 스크래핑 작업 (최신 데이터부터 2022년까지 수집)
-def scrape_first_page():
-    url = "https://quasarzone.com/bbs/qb_saleinfo?_method=post&type=&page=1&_token=6IHeiASojdKXgrQtsupUaDsRnhx6b7bLHh24pkda&category=%EB%85%B0%ED%8A%B8%EB%B6%81%2F%EB%AA%A8%EB%B0%94%EC%9D%BC&shop=&popularity=&kind=subject&keyword=&sort=num%2C+reply&direction=DESC"
-    soup = get_soup(url)
+def scrape_recent_data():
+    base_url = "https://quasarzone.com/bbs/qb_saleinfo?_method=post&type=&page={}&_token=6IHeiASojdKXgrQtsupUaDsRnhx6b7bLHh24pkda&category=%EB%85%B0%ED%8A%B8%EB%B6%81%2F%EB%AA%A8%EB%B0%94%EC%9D%BC&shop=&popularity=&kind=subject&keyword=&sort=num%2C+reply&direction=DESC"
+    hotdeal_info = []
+    page = 1
 
-    hotdeal_info = pd.DataFrame(columns=['title', 'created_at', 'price', 'views', 'votes'])
+    while True:
+        url = base_url.format(page)
+        soup = get_soup(url)
 
-    for row in soup.select("div.list-board-wrap div.market-type-list table tbody tr"):
-        try:
-            votes = row.select_one("span.num.num")
-            title = row.select_one("a.subject-link span.ellipsis-with-reply-cnt")
-            price = row.select_one("span.text-orange")
-            views = row.select_one("span.count")
-            date = row.select_one("span.date")
+        rows = soup.select("div.list-board-wrap div.market-type-list table tbody tr")
+        if not rows:  # 더 이상 데이터가 없으면 종료
+            break
 
-            if not all([votes, title, price, views, date]):
+        for row in rows:
+            try:
+                votes = row.select_one("span.num.num")
+                title = row.select_one("a.subject-link span.ellipsis-with-reply-cnt")
+                price = row.select_one("span.text-orange")
+                views = row.select_one("span.count")
+                date = row.select_one("span.date")
+
+                if not all([votes, title, price, views, date]):
+                    continue
+
+                created_at = parse_date(date.text.strip())
+                if created_at is None:
+                    continue
+
+                hotdeal_info.append({
+                    'title': title.text.strip(),
+                    'created_at': created_at,
+                    'price': price.text.strip(),
+                    'views': parse_views(views.text.strip()),
+                    'votes': votes.text.strip()
+                })
+            except Exception as e:
+                print(f"⚠️ Error parsing row: {e}")
                 continue
 
-            hotdeal_info.loc[len(hotdeal_info)] = [
-                title.text.strip(),
-                parse_date(date.text.strip()),
-                price.text.strip(),
-                parse_views(views.text.strip()),
-                votes.text.strip()
-            ]
-        except Exception as e:
-            print(f"⚠️ Error parsing row: {e}")
-            continue
+        page += 1  # 다음 페이지로 이동
 
-    # ✅ CSV로 저장
-    file_path = "/tmp/hotdeal_first_page.csv"
-    hotdeal_info.to_csv(file_path, index=False, encoding='utf-8')
+    # 기존 JSON 파일 읽기 (이미 존재하는 데이터와 합치기)
+    file_path = "/tmp/hotdeal_data.json"
+    if os.path.exists(file_path):
+        with open(file_path, 'r', encoding='utf-8') as f:
+            existing_data = json.load(f)
+    else:
+        existing_data = []
+
+    # 기존 데이터에 새로운 데이터 추가
+    existing_data.extend(hotdeal_info)
+
+    # 모든 데이터를 JSON으로 저장
+    with open(file_path, 'w', encoding='utf-8') as f:
+        json.dump(existing_data, f, ensure_ascii=False, indent=4)
     print(f"✅ 저장 완료: {file_path}")
 
-    # ✅ 로그에 5개 행만 출력
-    print("✅ 상위 5개 데이터:")
-    print(hotdeal_info.head(5).to_string(index=False))
+    # ✅ 로그에 최근 5개 데이터 출력
+    print("✅ 최근 5개 데이터:")
+    print(json.dumps(existing_data[-5:], ensure_ascii=False, indent=4))
 
     # S3 업로드 함수 호출
-    upload_to_s3(filename=file_path, key='test/s3_test.txt', bucket_name='de6-team8-bucket')  # 'test/' 폴더 아래에 업로드
+    upload_to_s3(filename=file_path, key='raw_data/quasarzone/hotdeal_data.json', bucket_name='de6-team8-bucket')
 
 # DAG 기본 설정
 default_args = {
-    'start_date': datetime(2025, 7, 8),
+    'start_date': datetime(2022, 1, 1),  # 2022년 1월 1일부터 시작
     'retries': 1,
-    'retry_delay': timedelta(minutes=1)
+    'retry_delay': timedelta(minutes=1)  # 판다스 없이 timedelta 사용
 }
 
+# DAG 정의
 with DAG(
-    dag_id='hotdeal_scraper_first_page',
+    dag_id='hotdeal_scraper_recent_data',
     default_args=default_args,
-    schedule_interval=None,
+    schedule_interval='@daily',  # 하루에 한 번 실행
     catchup=False,
     tags=['hotdeal', 'scraper']
 ) as dag:
 
     scrape_task = PythonOperator(
-        task_id='scrape_first_page',
-        python_callable=scrape_first_page
+        task_id='scrape_recent_data',
+        python_callable=scrape_recent_data
     )
 
-    scrape_task
+    scrape_task  # DAG 실행
+
