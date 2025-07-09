@@ -10,12 +10,9 @@ import time
 client_id = "OV0nQqLPAApHItg6THZX"
 client_secret = "Akl1n4D5Ka"
 
-def scrape_hotdeal():
-    pass
-
-def search_naver_shopping(query, start=1, display=100):
+def search_naver_shopping(query, start=1, display=100, sort="sim"):
     enc = urllib.parse.quote(query)
-    url = f"https://openapi.naver.com/v1/search/shop?query={enc}&start={start}&display={display}"
+    url = f"https://openapi.naver.com/v1/search/shop?query={enc}&sort={sort}&start={start}&display={display}"
     req = urllib.request.Request(url)
     req.add_header("X-Naver-Client-Id", client_id)
     req.add_header("X-Naver-Client-Secret", client_secret)
@@ -63,16 +60,12 @@ default_args = {
 }
 
 with DAG(
-    dag_id='combined_scraper',
+    dag_id='naverapi_scraper',
     default_args=default_args,
     schedule_interval=None,
     catchup=False,
-    tags=['hotdeal', 'naver']
+    tags=['naver','scraper']
 ) as dag:
-    scrape_hotdeal_task = PythonOperator(
-        task_id='scrape_hotdeal',
-        python_callable=scrape_hotdeal
-    )
     naver_shopping_task = PythonOperator(
         task_id='naver_shopping',
         python_callable=run_naver_shopping
