@@ -70,3 +70,4 @@ with DAG(
         task_id='naver_shopping',
         python_callable=run_naver_shopping
     )
+naver_shopping_task
