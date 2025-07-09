@@ -70,4 +70,3 @@ with DAG(
         task_id='naver_shopping',
         python_callable=run_naver_shopping
     )
-    scrape_hotdeal_task >> naver_shopping_task
