@@ -61,12 +61,6 @@ def run_naver_shopping():
     # 1) 타임스탬프로 파일명 생성
     timestamp = datetime.now().strftime("%Y-%m-%d")
     filename = f"naver_{timestamp}.json"
-    local_path = os.path.join("/tmp", filename)
-
-    # 2) 로컬에 JSON 덤프
-    with open(local_path, "w", encoding="utf-8") as f:
-        json.dump(total, f, ensure_ascii=False, indent=2)
-    print(f"✔️ 로컬 파일 생성 완료: {local_path}")
 
     # 3) S3에 업로드 (raw_data 하위)
     s3_key = f"raw_data/naver/{filename}"
