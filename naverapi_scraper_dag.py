@@ -69,7 +69,7 @@ def run_naver_shopping():
     filename = f"naver_{timestamp}.json"
     
     local_path = os.path.join("/home/ec2-user/tmp", filename)
-    print("End"
+    print("End")
     with open(local_path, "w", encoding="utf-8") as f:
         json.dump(total, f, ensure_ascii=False, indent=2)
     print(f"✔️ 로컬 파일 생성 완료: {local_path}")
