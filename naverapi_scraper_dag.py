@@ -64,7 +64,7 @@ def run_naver_shopping():
     timestamp = datetime.now().strftime("%Y-%m-%d")
     filename = f"naver_{timestamp}.json"
     
-    local_path = os.path.join("/home/ec2-user/airflow", filename)
+    local_path = os.path.join("/home/ec2-user/tmp", filename)
     
     # 3) S3에 업로드 (raw_data 하위)
     s3_key = f"raw_data/naver/{filename}"
