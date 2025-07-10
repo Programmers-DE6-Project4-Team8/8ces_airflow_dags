@@ -81,7 +81,7 @@ default_args = {
 with DAG(
     dag_id='naverapi_scraper',
     default_args=default_args,
-    schedule='@daily',
+    schedule_interval='@daily',
     catchup=False,
     tags=['naver','scraper']
 ) as dag:
