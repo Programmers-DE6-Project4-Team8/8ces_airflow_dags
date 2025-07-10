@@ -7,6 +7,8 @@ import urllib.parse
 import json
 import time
 import os
+from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+
 client_id = "OV0nQqLPAApHItg6THZX"
 client_secret = "Akl1n4D5Ka"
 
@@ -62,7 +64,7 @@ def run_naver_shopping():
     timestamp = datetime.now().strftime("%Y-%m-%d")
     filename = f"naver_{timestamp}.json"
     
-    local_path = os.path.join("/tmp", filename)
+    local_path = os.path.join("/home/ec2-user/airflow", filename)
     
     # 3) S3에 업로드 (raw_data 하위)
     s3_key = f"raw_data/naver/{filename}"
