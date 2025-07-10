@@ -10,6 +10,14 @@ import time
 client_id = "OV0nQqLPAApHItg6THZX"
 client_secret = "Akl1n4D5Ka"
 
+def upload_to_s3(filename: str, key: str, bucket_name: str) -> None:
+    # S3Hook을 사용하여 AWS 연결 설정
+    hook = S3Hook('aws_default')  # Airflow UI에서 설정한 AWS 연결 ID 사용
+    
+    # S3 업로드 경로 설정
+    hook.load_file(filename=filename, key=key, bucket_name=bucket_name)
+    print(f"✅ 파일 업로드 완료: {key}")
+
 def search_naver_shopping(query, start=1, display=100, sort="sim"):
     enc = urllib.parse.quote(query)
     url = f"https://openapi.naver.com/v1/search/shop?query={enc}&sort={sort}&start={start}&display={display}"
@@ -49,9 +57,20 @@ def run_naver_shopping():
         data = collect_shopping_data_by_category(cat, 1000)
         total.extend(data)
         time.sleep(1)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    with open(f"/tmp/naver_shopping_all_{timestamp}.json", "w", encoding="utf-8") as f:
+
+    # 1) 타임스탬프로 파일명 생성
+    timestamp = datetime.now().strftime("%Y-%m-%d")
+    filename = f"naver_{timestamp}.json"
+    local_path = os.path.join("/tmp", filename)
+
+    # 2) 로컬에 JSON 덤프
+    with open(local_path, "w", encoding="utf-8") as f:
         json.dump(total, f, ensure_ascii=False, indent=2)
+    print(f"✔️ 로컬 파일 생성 완료: {local_path}")
+
+    # 3) S3에 업로드 (raw_data 하위)
+    s3_key = f"raw_data/{filename}"
+    upload_to_s3(filename=local_path, key=s3_key, bucket_name="de6-team8-bucket")
 
 default_args = {
     'start_date': datetime(2025, 7, 8),
@@ -70,4 +89,5 @@ with DAG(
         task_id='naver_shopping',
         python_callable=run_naver_shopping
     )
+
 naver_shopping_task
