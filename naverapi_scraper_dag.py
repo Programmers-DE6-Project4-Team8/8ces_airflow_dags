@@ -6,7 +6,7 @@ import urllib.request
 import urllib.parse
 import json
 import time
-
+import os
 client_id = "OV0nQqLPAApHItg6THZX"
 client_secret = "Akl1n4D5Ka"
 
@@ -61,7 +61,9 @@ def run_naver_shopping():
     # 1) 타임스탬프로 파일명 생성
     timestamp = datetime.now().strftime("%Y-%m-%d")
     filename = f"naver_{timestamp}.json"
-
+    
+    local_path = os.path.join("/tmp", filename)
+    
     # 3) S3에 업로드 (raw_data 하위)
     s3_key = f"raw_data/naver/{filename}"
     upload_to_s3(filename=local_path, key=s3_key, bucket_name="de6-team8-bucket")
