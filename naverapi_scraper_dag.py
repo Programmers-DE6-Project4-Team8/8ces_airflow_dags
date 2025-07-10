@@ -35,6 +35,7 @@ def collect_shopping_data_by_category(category, target_count=1000):
     all_items = []
     seen = set()
     start = 1
+    
     while len(all_items) < target_count and start <= 1000:
         items = search_naver_shopping(category, start, 100)
         new = [it for it in items if it.get('productId') not in seen]
@@ -45,6 +46,7 @@ def collect_shopping_data_by_category(category, target_count=1000):
         all_items.extend(new)
         start += 100
         time.sleep(0.5)
+    
     return all_items
 
 def run_naver_shopping():
@@ -55,17 +57,19 @@ def run_naver_shopping():
         "스마트폰", "태블릿", "이어폰"
     ]
     total = []
+    print("Start")
     for cat in categories:
         data = collect_shopping_data_by_category(cat, 1000)
         total.extend(data)
         time.sleep(1)
-
+    print("End")
+    print("Start")
     # 1) 타임스탬프로 파일명 생성
     timestamp = datetime.now().strftime("%Y-%m-%d")
     filename = f"naver_{timestamp}.json"
     
     local_path = os.path.join("/home/ec2-user/tmp", filename)
-
+    print("End"
     with open(local_path, "w", encoding="utf-8") as f:
         json.dump(total, f, ensure_ascii=False, indent=2)
     print(f"✔️ 로컬 파일 생성 완료: {local_path}")
