@@ -69,7 +69,7 @@ def run_naver_shopping():
     print(f"✔️ 로컬 파일 생성 완료: {local_path}")
 
     # 3) S3에 업로드 (raw_data 하위)
-    s3_key = f"raw_data/{filename}"
+    s3_key = f"raw_data/naver/{filename}"
     upload_to_s3(filename=local_path, key=s3_key, bucket_name="de6-team8-bucket")
 
 default_args = {
