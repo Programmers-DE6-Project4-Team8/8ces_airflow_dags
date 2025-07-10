@@ -74,7 +74,7 @@ def run_naver_shopping():
 
 default_args = {
     'start_date': datetime(2025, 7, 8),
-    'retries': 1,
+    'retries': 3,
     'retry_delay': pd.Timedelta(minutes=1),
 }
 
