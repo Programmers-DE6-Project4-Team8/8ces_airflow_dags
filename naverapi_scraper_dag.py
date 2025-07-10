@@ -73,7 +73,7 @@ def run_naver_shopping():
     upload_to_s3(filename=local_path, key=s3_key, bucket_name="de6-team8-bucket")
 
 default_args = {
-    'start_date': datetime(2025, 7, 8),
+    'start_date': datetime(2025, 7, 10),
     'retries': 3,
     'retry_delay': pd.Timedelta(minutes=1),
 }
