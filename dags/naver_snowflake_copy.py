@@ -20,6 +20,7 @@ with DAG(
             COPY INTO processed.naver
             FROM @naver_stage
             FILE_FORMAT = (TYPE = PARQUET)
+            MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
             PATTERN = '.*\\.parquet$';
         """,
         snowflake_conn_id='team8_snowflake_conn',
