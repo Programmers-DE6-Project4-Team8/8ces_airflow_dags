@@ -1,5 +1,6 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+from airflow.providers.amazon.aws.operators.glue import GlueJobOperator
 from datetime import datetime
 import pandas as pd
 import urllib.request
@@ -97,4 +98,13 @@ with DAG(
         python_callable=run_naver_shopping
     )
 
-naver_shopping_task
+    glue_task = GlueJobOperator(
+        task_id="glue_transform_task",
+        job_name="naver_json_to_parquet",
+        script_location="s3://de6-team8-bucket/glue/scripts/naver/naver_json_to_parquet.py",
+        iam_role_name="de6-team8-glue-role",
+        region_name="ap-northeast-2",
+        wait_for_completion=True
+    )
+
+naver_shopping_task >> glue_task
