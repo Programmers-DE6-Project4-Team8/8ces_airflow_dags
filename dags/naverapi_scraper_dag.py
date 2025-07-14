@@ -19,7 +19,7 @@ def upload_to_s3(filename: str, key: str, bucket_name: str) -> None:
     hook = S3Hook('aws_default')  # Airflow UI에서 설정한 AWS 연결 ID 사용
     
     # S3 업로드 경로 설정
-    hook.load_file(filename=filename, key=key, bucket_name=bucket_name)
+    hook.load_file(filename=filename, key=key, replace=True, bucket_name=bucket_name)
     print(f"✅ 파일 업로드 완료: {key}")
 
 def search_naver_shopping(query, start=1, display=100, sort="sim"):
