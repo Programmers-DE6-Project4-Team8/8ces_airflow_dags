@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.log
+
+# Airflow
+logs/
+.airflow/
+.dags/
+.dagrun/
+
+# 가상환경
+env/
+venv/
+.venv/
+ENV/
+.env
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS별
+.DS_Store
+Thumbs.db
+
+# 기타
+*.sqlite
+*.db
