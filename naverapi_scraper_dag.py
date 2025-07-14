@@ -12,6 +12,7 @@ from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 client_id = "OV0nQqLPAApHItg6THZX"
 client_secret = "Akl1n4D5Ka"
 
+
 def upload_to_s3(filename: str, key: str, bucket_name: str) -> None:
     # S3Hook을 사용하여 AWS 연결 설정
     hook = S3Hook('aws_default')  # Airflow UI에서 설정한 AWS 연결 ID 사용
