@@ -5,7 +5,6 @@ import requests
 from bs4 import BeautifulSoup as bs
 import pandas as pd
 import re
-import time
 
 def get_soup(url):
     response = requests.get(url, headers={
