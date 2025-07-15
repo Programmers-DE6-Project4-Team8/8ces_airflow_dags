@@ -175,16 +175,18 @@ with DAG(
         region_name="ap-northeast-2",
         wait_for_completion=True
     )
-
+    
     copy_to_snowflake = SnowflakeOperator(
         task_id='copy_to_snowflake',
         sql=f"""
         COPY INTO processed.quasarzone
         FROM @quasarzone_stage/de6-team8-testjob-{datetime.today().strftime("%Y-%m-%d")}/
         FILE_FORMAT = (TYPE = PARQUET)
+        MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
         PATTERN = '.*\\.parquet$';
         """,
         snowflake_conn_id='team8_snowflake_conn',
-    )
+)
+
 
     [task_pc_hardware, task_notebook_mobile] >> glue_transform >> copy_to_snowflake
