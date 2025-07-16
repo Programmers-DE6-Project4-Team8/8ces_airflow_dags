@@ -35,11 +35,12 @@ with DAG(
         }""",
         aws_conn_id='aws_default',
         log_type='Tail',
+        invocation_type='Event'
     )
 
     glue_transform = GlueJobOperator(
         task_id="glue_transform",
-        job_name="naver_json_to_parquet",
+        job_name="de6-team8-naver_json_to_parquet",
         script_location="s3://de6-team8-bucket/glue/scripts/naver/naver_json_to_parquet.py",
         iam_role_name="de6-team8-glue-role",
         region_name="ap-northeast-2",
