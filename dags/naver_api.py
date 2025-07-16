@@ -1,5 +1,5 @@
 from airflow import DAG
-from airflow.providers.amazon.aws.operators.lambda_function import AwsLambdaInvokeFunctionOperator
+from airflow.providers.amazon.aws.operators.lambda_function import LambdaInvokeFunctionOperator
 from airflow.providers.amazon.aws.operators.glue import GlueJobOperator
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 from datetime import datetime, timedelta
@@ -19,10 +19,10 @@ with DAG(
     tags=['naver', 'lambda', 'glue', 'snowflake']
 ) as dag:
 
-    lambda_crawl = AwsLambdaInvokeFunctionOperator(
+    lambda_crawl = LambdaInvokeFunctionOperator(
         task_id='lambda_crawl',
         function_name='naver_shopping_crawler_lambda',
-        payload={
+        payload=str({
             "categories": [
                 "CPU", "GPU", "RAM", "SSD", "HDD",
                 "메인보드", "파워서플라이",
@@ -32,7 +32,7 @@ with DAG(
             "bucket": "de6-team8-bucket",
             "prefix": "raw_data/naver/",
             "filename": "naver_{{ ds }}.json"
-        },
+        }),
         aws_conn_id='aws_default',
         log_type='Tail',
     )
