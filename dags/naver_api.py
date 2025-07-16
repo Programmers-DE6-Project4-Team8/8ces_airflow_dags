@@ -20,7 +20,7 @@ with DAG(
 ) as dag:
 
     lambda_crawl = AwsLambdaInvokeFunctionOperator(
-        task_id='lambda_crawl',
+        task_id='trigger_naver_lambda',
         function_name='naver_shopping_crawler_lambda',
         payload={
             "categories": [
