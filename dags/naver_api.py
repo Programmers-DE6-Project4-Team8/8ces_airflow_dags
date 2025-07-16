@@ -22,7 +22,7 @@ with DAG(
     lambda_crawl = LambdaInvokeFunctionOperator(
         task_id='lambda_crawl',
         function_name='naver_shopping_crawler_lambda',
-        payload=str({
+        payload="""{
             "categories": [
                 "CPU", "GPU", "RAM", "SSD", "HDD",
                 "메인보드", "파워서플라이",
@@ -32,7 +32,7 @@ with DAG(
             "bucket": "de6-team8-bucket",
             "prefix": "raw_data/naver/",
             "filename": "naver_{{ ds }}.json"
-        }),
+        }""",
         aws_conn_id='aws_default',
         log_type='Tail',
     )
