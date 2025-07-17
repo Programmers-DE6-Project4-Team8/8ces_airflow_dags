@@ -9,6 +9,7 @@ import requests
 from bs4 import BeautifulSoup as bs
 import time
 import re
+import boto3
 
 default_args = {
     'owner': 'airflow',
@@ -126,6 +127,17 @@ def crawl_quasarzone_category(category, base_url):
     else:
         print("📭 신규 데이터 없음")
 
+# ✅ parquet 경로 삭제 함수
+def delete_existing_parquet_files(**kwargs):
+    import boto3
+    date_str = datetime.today().strftime('%Y-%m-%d')
+    prefix = f'processed_data/quasarzone/parquet/de6-team8-testjob-{date_str}/'
+    s3 = boto3.resource('s3')
+    bucket = s3.Bucket('de6-team8-bucket')
+    bucket.objects.filter(Prefix=prefix).delete()
+    print(f"🧹 삭제 완료: {prefix}")
+
+# DAG 정의
 with DAG(
     dag_id='quasarzone_etl',
     default_args=default_args,
@@ -153,6 +165,11 @@ with DAG(
         ]
     )
 
+    clear_s3_parquet = PythonOperator(
+        task_id='clear_s3_parquet_folder',
+        python_callable=delete_existing_parquet_files
+    )
+
     glue_transform = GlueJobOperator(
         task_id="run_glue_job",
         job_name="de6-team8-testjob",
@@ -163,21 +180,19 @@ with DAG(
     )
 
     copy_to_snowflake = SnowflakeOperator(
-    task_id='copy_to_snowflake',
-    sql="""
-    -- ✅ 1. 먼저 오늘 날짜 데이터 삭제
-    DELETE FROM processed.quasarzone
-    WHERE created_at = '{{ ds }}';
+        task_id='copy_to_snowflake',
+        sql="""
+        DELETE FROM processed.quasarzone
+        WHERE created_at = '{{ ds }}';
 
-    -- ✅ 2. 오늘 날짜만 적재
-    COPY INTO processed.quasarzone
-    FROM @quasarzone_stage/de6-team8-testjob-{{ ds }}/
-    FILE_FORMAT = (TYPE = PARQUET)
-    MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
-    PATTERN = '.*\\.parquet$';
-    """,
-    snowflake_conn_id='team8_snowflake_conn',
-)
+        COPY INTO processed.quasarzone
+        FROM @quasarzone_stage/de6-team8-testjob-{{ ds }}/
+        FILE_FORMAT = (TYPE = PARQUET)
+        MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
+        PATTERN = '.*\\.parquet$';
+        """,
+        snowflake_conn_id='team8_snowflake_conn',
+    )
 
+    [task_pc_hardware, task_notebook_mobile] >> clear_s3_parquet >> glue_transform >> copy_to_snowflake
 
-    [task_pc_hardware, task_notebook_mobile] >> glue_transform >> copy_to_snowflake
