@@ -165,13 +165,11 @@ with DAG(
     copy_to_snowflake = SnowflakeOperator(
     task_id='copy_to_snowflake',
     sql="""
+    
     DELETE FROM processed.quasarzone
-    WHERE created_at IN (
-        SELECT created_at
-        FROM @quasarzone_stage/de6-team8-testjob-{{ ds }}/
-        (FILE_FORMAT => (TYPE => PARQUET))
-    );
+    WHERE created_at = '{{ ds }}';
 
+    -- S3에서 parquet 적재
     COPY INTO processed.quasarzone
     FROM @quasarzone_stage/de6-team8-testjob-{{ ds }}/
     FILE_FORMAT = (TYPE = PARQUET)
@@ -180,5 +178,6 @@ with DAG(
     """,
     snowflake_conn_id='team8_snowflake_conn',
 )
+
 
     [task_pc_hardware, task_notebook_mobile] >> glue_transform >> copy_to_snowflake
