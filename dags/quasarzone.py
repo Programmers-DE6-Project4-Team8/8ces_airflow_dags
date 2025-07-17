@@ -8,9 +8,7 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup as bs
 import time
-import os
 import re
-import json
 
 default_args = {
     'owner': 'airflow',
@@ -166,12 +164,12 @@ with DAG(
 
     copy_to_snowflake = SnowflakeOperator(
         task_id='copy_to_snowflake',
-        sql=f"""
+        sql="""
         DELETE FROM processed.quasarzone
-        WHERE created_at = '{datetime.today().strftime("%Y-%m-%d")}';
+        WHERE created_at = '{{ ds }}';
 
         COPY INTO processed.quasarzone
-        FROM @quasarzone_stage/de6-team8-testjob-{datetime.today().strftime("%Y-%m-%d")}/
+        FROM @quasarzone_stage/de6-team8-testjob-{{ ds }}/
         FILE_FORMAT = (TYPE = PARQUET)
         MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
         PATTERN = '.*\\.parquet$';
@@ -180,4 +178,3 @@ with DAG(
     )
 
     [task_pc_hardware, task_notebook_mobile] >> glue_transform >> copy_to_snowflake
-
