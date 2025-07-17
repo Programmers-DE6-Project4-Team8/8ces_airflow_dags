@@ -165,11 +165,11 @@ with DAG(
     copy_to_snowflake = SnowflakeOperator(
     task_id='copy_to_snowflake',
     sql="""
-    
+    -- ✅ 1. 먼저 오늘 날짜 데이터 삭제
     DELETE FROM processed.quasarzone
     WHERE created_at = '{{ ds }}';
 
-    -- S3에서 parquet 적재
+    -- ✅ 2. 오늘 날짜만 적재
     COPY INTO processed.quasarzone
     FROM @quasarzone_stage/de6-team8-testjob-{{ ds }}/
     FILE_FORMAT = (TYPE = PARQUET)
