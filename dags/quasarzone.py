@@ -184,8 +184,14 @@ with DAG(
     sql=f"""
     MERGE INTO processed.quasarzone AS target
     USING (
-      SELECT * FROM @quasarzone_stage/de6-team8-testjob-{datetime.today().strftime("%Y-%m-%d")}/ 
-      (FILE_FORMAT => (TYPE => 'PARQUET'))
+      SELECT $1:votes::STRING AS votes,
+             $1:title::STRING AS title,
+             $1:price::STRING AS price,
+             $1:views::NUMBER AS views,
+             $1:created_at::DATE AS created_at,
+             $1:category::STRING AS category
+      FROM @quasarzone_stage/de6-team8-testjob-{datetime.today().strftime("%Y-%m-%d")}/
+      (FILE_FORMAT => 'parquet_format')
     ) AS source
     ON target.title = source.title AND target.created_at = source.created_at
     WHEN NOT MATCHED THEN
@@ -194,6 +200,7 @@ with DAG(
     """,
     snowflake_conn_id='team8_snowflake_conn',
 )
+
 
     
     
