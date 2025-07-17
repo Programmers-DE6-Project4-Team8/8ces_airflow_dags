@@ -175,18 +175,22 @@ with DAG(
         region_name="ap-northeast-2",
         wait_for_completion=True
     )
-    
-    copy_to_snowflake = SnowflakeOperator(
-        task_id='copy_to_snowflake',
-        sql=f"""
-        COPY INTO processed.quasarzone
-        FROM @quasarzone_stage/de6-team8-testjob-{datetime.today().strftime("%Y-%m-%d")}/
-        FILE_FORMAT = (TYPE = PARQUET)
-        MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
-        PATTERN = '.*\\.parquet$';
-        """,
-        snowflake_conn_id='team8_snowflake_conn',
+
+    merge_into_snowflake = SnowflakeOperator(
+    task_id='merge_into_snowflake',
+    sql=f"""
+    MERGE INTO processed.quasarzone AS target
+    USING @quasarzone_stage/de6-team8-testjob-{datetime.today().strftime("%Y-%m-%d")}/ 
+      FILE_FORMAT = (TYPE = PARQUET)
+    ON target.title = source.title AND target.created_at = source.created_at
+    WHEN NOT MATCHED THEN
+      INSERT (votes, title, price, views, created_at, category)
+      VALUES (source.votes, source.title, source.price, source.views, source.created_at, source.category);
+    """,
+    snowflake_conn_id='team8_snowflake_conn',
 )
+    
+    
 
 
-    [task_pc_hardware, task_notebook_mobile] >> glue_transform >> copy_to_snowflake
+    [task_pc_hardware, task_notebook_mobile] >> glue_transform >> merge_into_snowflake
