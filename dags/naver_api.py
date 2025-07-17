@@ -16,7 +16,8 @@ with DAG(
     default_args=default_args,
     schedule_interval='@daily',
     catchup=False,
-    tags=['naver', 'lambda', 'glue', 'snowflake']
+    tags=['naver', 'lambda', 'glue', 'snowflake'],
+    max_active_runs=1,
 ) as dag:
 
     lambda_crawl = LambdaInvokeFunctionOperator(
