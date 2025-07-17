@@ -176,12 +176,17 @@ with DAG(
         wait_for_completion=True
     )
 
+
+    
+    
     merge_into_snowflake = SnowflakeOperator(
     task_id='merge_into_snowflake',
     sql=f"""
     MERGE INTO processed.quasarzone AS target
-    USING @quasarzone_stage/de6-team8-testjob-{datetime.today().strftime("%Y-%m-%d")}/ 
-      FILE_FORMAT = (TYPE = PARQUET)
+    USING (
+      SELECT * FROM @quasarzone_stage/de6-team8-testjob-{datetime.today().strftime("%Y-%m-%d")}/ 
+      (FILE_FORMAT => (TYPE => 'PARQUET'))
+    ) AS source
     ON target.title = source.title AND target.created_at = source.created_at
     WHEN NOT MATCHED THEN
       INSERT (votes, title, price, views, created_at, category)
@@ -189,6 +194,7 @@ with DAG(
     """,
     snowflake_conn_id='team8_snowflake_conn',
 )
+
     
     
 
