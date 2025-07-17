@@ -12,9 +12,6 @@ import os
 import re
 import json
 
-# ─────────────────────────────
-# DAG 기본 설정
-# ─────────────────────────────
 default_args = {
     'owner': 'airflow',
     'retries': 2,
@@ -24,9 +21,6 @@ default_args = {
 YEAR = datetime.today().year
 MONTH = datetime.today().month
 
-# ─────────────────────────────
-# 공통 유틸
-# ─────────────────────────────
 def get_soup_from_page_with(url):
     headers = {'User-Agent': 'Mozilla/5.0'}
     res = requests.get(url, headers=headers)
@@ -85,9 +79,6 @@ def scrap_hotdeal_info(soup, hotdeal_info, category_name):
             summary["category"] = category_name
             hotdeal_info.append(summary)
 
-# ─────────────────────────────
-# 크롤링 Task
-# ─────────────────────────────
 def crawl_quasarzone_category(category, base_url):
     today_str = datetime.today().strftime("%Y-%m-%d")
     until_date = datetime(2024, 1, 1)
@@ -137,9 +128,6 @@ def crawl_quasarzone_category(category, base_url):
     else:
         print("📭 신규 데이터 없음")
 
-# ─────────────────────────────
-# DAG 정의
-# ─────────────────────────────
 with DAG(
     dag_id='quasarzone_etl',
     default_args=default_args,
@@ -176,34 +164,20 @@ with DAG(
         wait_for_completion=True
     )
 
+    copy_to_snowflake = SnowflakeOperator(
+        task_id='copy_to_snowflake',
+        sql=f"""
+        DELETE FROM processed.quasarzone
+        WHERE created_at = '{datetime.today().strftime("%Y-%m-%d")}';
 
-    
-    
-    merge_into_snowflake = SnowflakeOperator(
-    task_id='merge_into_snowflake',
-    sql=f"""
-    MERGE INTO processed.quasarzone AS target
-    USING (
-      SELECT $1:votes::STRING AS votes,
-             $1:title::STRING AS title,
-             $1:price::STRING AS price,
-             $1:views::NUMBER AS views,
-             $1:created_at::DATE AS created_at,
-             $1:category::STRING AS category
-      FROM @quasarzone_stage/de6-team8-testjob-{datetime.today().strftime("%Y-%m-%d")}/
-      (FILE_FORMAT => 'parquet_format')
-    ) AS source
-    ON target.title = source.title AND target.created_at = source.created_at
-    WHEN NOT MATCHED THEN
-      INSERT (votes, title, price, views, created_at, category)
-      VALUES (source.votes, source.title, source.price, source.views, source.created_at, source.category);
-    """,
-    snowflake_conn_id='team8_snowflake_conn',
-)
+        COPY INTO processed.quasarzone
+        FROM @quasarzone_stage/de6-team8-testjob-{datetime.today().strftime("%Y-%m-%d")}/
+        FILE_FORMAT = (TYPE = PARQUET)
+        MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
+        PATTERN = '.*\\.parquet$';
+        """,
+        snowflake_conn_id='team8_snowflake_conn',
+    )
 
+    [task_pc_hardware, task_notebook_mobile] >> glue_transform >> copy_to_snowflake
 
-    
-    
-
-
-    [task_pc_hardware, task_notebook_mobile] >> glue_transform >> merge_into_snowflake
