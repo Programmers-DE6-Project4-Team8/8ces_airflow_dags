@@ -34,6 +34,7 @@ LOCAL_TMP_DIR = '/home/ec2-user/tmp'
 def run_danawa_crawl(**context):
     date_str = datetime.now().strftime('%Y-%m-%d')
     filename = f"danawa_{date_str}.json"
+    os.makedirs(LOCAL_TMP_DIR, exist_ok=True)
     local_path = os.path.join(LOCAL_TMP_DIR, filename)
     s3_key = S3_KEY_TEMPLATE.format(date=date_str)
 
@@ -49,18 +50,19 @@ def run_danawa_crawl(**context):
         driver.get(url)
         driver.implicitly_wait(1)
         # 인기순 정렬
-        driver.find_element(By.CSS_SELECTOR,
-            "div.prod_list_opts ul.order_list li.order_item[data-sort-method='BoardCount']").click()
+        driver.find_element(
+            By.CSS_SELECTOR,
+            "div.prod_list_opts ul.order_list li.order_item[data-sort-method='BoardCount']"
+        ).click()
         time.sleep(2)
-        page = 1
         while True:
             soup = BeautifulSoup(driver.page_source, 'html.parser')
             for prod in soup.select('div.prod_main_info'):
                 item = {}
-                # 모델명
-                name_el = prod.select_one('p.prod_name a')
-                if name_el and name_el.text.strip():
-                    item['productModel'] = name_el.text.strip()
+                # 제품명
+                title_el = prod.select_one('p.prod_name a')
+                if title_el and title_el.text.strip():
+                    item['title'] = title_el.text.strip()
                 # 출시일
                 rel_el = prod.select_one('div.prod_sub_info dd')
                 if rel_el and rel_el.text.strip():
@@ -69,7 +71,19 @@ def run_danawa_crawl(**context):
                 link_el = prod.select_one('div.thumb_image a')
                 if link_el and link_el.get('href'):
                     item['link'] = link_el['href']
-                # 스펙
+                # 가격 정보: 리스트로 수집 후 오름차순, 문자열로 저장
+                price_items = prod.select('div.prod_pricelist li')
+                prices = []
+                for price_el in price_items:
+                    price_tag = price_el.select_one('p.price_sect a')
+                    if price_tag and price_tag.text.strip():
+                        text = price_tag.text.replace(',','').replace('원','').strip()
+                        if text.isdigit():
+                            prices.append(int(text))
+                if prices:
+                    prices_sorted = sorted(prices)
+                    item['price_info'] = ','.join(str(p) for p in prices_sorted)
+                # 스펙: 실제 있는 key:value와 비콜론 없는 항목을 하나의 dict로 묶어 JSON 문자열로 저장
                 spec_el = prod.select_one('div.spec_list')
                 if spec_el and spec_el.text.strip():
                     parts = [p.strip() for p in spec_el.text.strip().split('/')]
@@ -82,34 +96,34 @@ def run_danawa_crawl(**context):
                                 combined[-1] += '/' + part
                             else:
                                 combined.append(part)
+                    spec_dict = {}
                     # 비콜론 없는 항목
                     non_colon = [c for c in combined if ':' not in c]
                     for idx, val in enumerate(non_colon, start=1):
                         if val:
-                            item[f'Spec_{idx}'] = val
+                            spec_dict[f'Spec_{idx}'] = val
                     # key:value 항목
                     for c in combined:
                         if ':' in c:
                             k, v = c.split(':', 1)
                             k, v = k.strip(), v.strip()
                             if v:
-                                item[k] = v
+                                spec_dict[k] = v
+                    if spec_dict:
+                        item['spec'] = json.dumps(spec_dict, ensure_ascii=False)
                 records.append(item)
+            # 다음 페이지로 이동
             try:
                 nav = driver.find_element(By.CSS_SELECTOR, '#productListArea .prod_num_nav')
-                page += 1
-                if page % 10 == 1:
-                    nav.find_element(By.CSS_SELECTOR, 'a.pg_next').click()
-                else:
-                    nav.find_element(By.LINK_TEXT, str(page)).click()
+                next_btn = nav.find_element(By.CSS_SELECTOR, 'a.pg_next')
+                next_btn.click()
                 time.sleep(2)
             except:
                 break
 
     driver.quit()
 
-    # JSON 저장 (빈 값 키 없음)
-    os.makedirs(LOCAL_TMP_DIR, exist_ok=True)
+    # JSON 파일로 저장
     with open(local_path, 'w', encoding='utf-8') as f:
         json.dump(records, f, ensure_ascii=False, indent=2)
 
@@ -156,4 +170,16 @@ glue_task = GlueJobOperator(
     dag=dag
 )
 
-crawl_task >> glue_task
+copy_to_snowflake = SnowflakeOperator(
+        task_id='copy_to_snowflake',
+        sql="""
+            COPY INTO processed.danawa
+            FROM @danawa_stage/processed_data/danawa/parquet/date={{ ds }}/
+            FILE_FORMAT = (TYPE = PARQUET)
+            MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
+            PATTERN = '.*\\.parquet$';
+        """,
+        snowflake_conn_id='team8_snowflake_conn',
+    )
+
+crawl_task >> glue_task >> copy_to_snowflake
