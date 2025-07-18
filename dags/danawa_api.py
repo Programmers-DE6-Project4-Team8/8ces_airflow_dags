@@ -74,7 +74,7 @@ def run_danawa_crawl(**context):
     options.add_argument('--disable-dev-shm-usage')
     # options.add_argument('--window-size=1920,1080')
     service = Service(executable_path="/usr/local/bin/chromedriver")
-    driver = webdriver.Chrome(options=options)
+    driver = webdriver.Chrome(service=service, options=options)
 
     items = []
     for url in SEARCH_SITE:
