@@ -7,8 +7,8 @@ import time, json, os
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from bs4 import BeautifulSoup
-import pandas as pd
 
 # 설정
 SEARCH_SITE = [
@@ -30,51 +30,21 @@ BUCKET_NAME = 'de6-team8-bucket'
 S3_KEY_TEMPLATE = 'raw_data/danawa/danawa_{date}.json'
 LOCAL_TMP_DIR = '/home/ec2-user/tmp'
 
-# spec 분리 유틸
-def parse_spec(df: pd.DataFrame) -> pd.DataFrame:
-    rows = []
-    for _, row in df.iterrows():
-        spec = str(row.get('spec', ''))
-        parts = [p.strip() for p in spec.split('/')]
-        combined = []
-        for part in parts:
-            if ':' in part:
-                combined.append(part)
-            else:
-                if combined and ':' in combined[-1]:
-                    combined[-1] += '/' + part
-                else:
-                    combined.append(part)
-        data = row.to_dict()
-        # 비콜론 항목
-        non_colon = [c for c in combined if ':' not in c]
-        for i, v in enumerate(non_colon, 1):
-            data[f'Spec_{i}'] = v
-        # 콜론 기반 키:값 분리
-        for c in combined:
-            if ':' in c:
-                k, v = c.split(':', 1)
-                data[k.strip()] = v.strip()
-        rows.append(data)
-    return pd.DataFrame(rows)
-
 # 크롤링 및 S3 업로드
 def run_danawa_crawl(**context):
-    # 날짜별 파일명
     date_str = datetime.now().strftime('%Y-%m-%d')
     filename = f"danawa_{date_str}.json"
     local_path = os.path.join(LOCAL_TMP_DIR, filename)
     s3_key = S3_KEY_TEMPLATE.format(date=date_str)
 
-    # Selenium 설정
     options = Options()
     options.add_argument('--headless')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
-    # options.add_argument('--window-size=1920,1080')
-    driver = webdriver.Chrome(options=options)
+    service = Service(executable_path='/usr/local/bin/chromedriver')
+    driver = webdriver.Chrome(service=service, options=options)
 
-    items = []
+    records = []
     for url in SEARCH_SITE:
         driver.get(url)
         driver.implicitly_wait(1)
@@ -86,12 +56,45 @@ def run_danawa_crawl(**context):
         while True:
             soup = BeautifulSoup(driver.page_source, 'html.parser')
             for prod in soup.select('div.prod_main_info'):
-                items.append({
-                    'productModel': prod.select_one('p.prod_name a').get_text(strip=True) if prod.select_one('p.prod_name a') else '',
-                    'release_date': prod.select_one('div.prod_sub_info dd').get_text(strip=True)[:-1] if prod.select_one('div.prod_sub_info dd') else '',
-                    'link': prod.select_one('div.thumb_image a')['href'] if prod.select_one('div.thumb_image a') else '',
-                    'spec': prod.select_one('div.spec_list').get_text(strip=True) if prod.select_one('div.spec_list') else ''
-                })
+                item = {}
+                # 모델명
+                name_el = prod.select_one('p.prod_name a')
+                if name_el and name_el.text.strip():
+                    item['productModel'] = name_el.text.strip()
+                # 출시일
+                rel_el = prod.select_one('div.prod_sub_info dd')
+                if rel_el and rel_el.text.strip():
+                    item['release_date'] = rel_el.text.strip()[:-1]
+                # 링크
+                link_el = prod.select_one('div.thumb_image a')
+                if link_el and link_el.get('href'):
+                    item['link'] = link_el['href']
+                # 스펙
+                spec_el = prod.select_one('div.spec_list')
+                if spec_el and spec_el.text.strip():
+                    parts = [p.strip() for p in spec_el.text.strip().split('/')]
+                    combined = []
+                    for part in parts:
+                        if ':' in part:
+                            combined.append(part)
+                        else:
+                            if combined and ':' in combined[-1]:
+                                combined[-1] += '/' + part
+                            else:
+                                combined.append(part)
+                    # 비콜론 없는 항목
+                    non_colon = [c for c in combined if ':' not in c]
+                    for idx, val in enumerate(non_colon, start=1):
+                        if val:
+                            item[f'Spec_{idx}'] = val
+                    # key:value 항목
+                    for c in combined:
+                        if ':' in c:
+                            k, v = c.split(':', 1)
+                            k, v = k.strip(), v.strip()
+                            if v:
+                                item[k] = v
+                records.append(item)
             try:
                 nav = driver.find_element(By.CSS_SELECTOR, '#productListArea .prod_num_nav')
                 page += 1
@@ -105,12 +108,10 @@ def run_danawa_crawl(**context):
 
     driver.quit()
 
-    # DataFrame 변환 및 spec 분리
-    df = pd.DataFrame(items)
-    df = parse_spec(df)
-    if 'spec' in df.columns:
-        df = df.drop(columns=['spec'])
-    df.to_json(local_path, orient='records', force_ascii=False, indent=2)
+    # JSON 저장 (빈 값 키 없음)
+    os.makedirs(LOCAL_TMP_DIR, exist_ok=True)
+    with open(local_path, 'w', encoding='utf-8') as f:
+        json.dump(records, f, ensure_ascii=False, indent=2)
 
     # S3 업로드
     hook = S3Hook(aws_conn_id='aws_default')
@@ -132,7 +133,7 @@ default_args = {
 }
 
 dag = DAG(
-    dag_id='danawa_crawl_and_transform',
+    dag_id='danawa_crawl_and_clean',
     default_args=default_args,
     schedule_interval='@daily',
     catchup=False,
