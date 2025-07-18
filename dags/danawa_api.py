@@ -145,31 +145,30 @@ default_args = {
     'retry_delay': timedelta(minutes=5),
 }
 
-dag = DAG(
+with DAG(
     dag_id='danawa_crawl_and_clean',
     default_args=default_args,
     schedule_interval='@daily',
     catchup=False,
-    tags=['danawa', 'crawler']
-)
+    tags=['danawa', 'crawler', 'glue', 'snowflake'],
+    max_active_runs=1,
+) as dag:
 
-crawl_task = PythonOperator(
-    task_id='crawl_and_upload_danawa',
-    python_callable=run_danawa_crawl,
-    dag=dag
-)
+    crawl_task = PythonOperator(
+        task_id='crawl_and_upload_danawa',
+        python_callable=run_danawa_crawl
+    )
 
-glue_task = GlueJobOperator(
-    task_id='glue_transform_danawa',
-    job_name='danawa_json_to_parquet',
-    script_location='s3://de6-team8-bucket/glue/scripts/danawa/danawa_json_to_parquet.py',
-    iam_role_name='de6-team8-glue-role',
-    region_name='ap-northeast-2',
-    wait_for_completion=True,
-    dag=dag
-)
+    glue_task = GlueJobOperator(
+        task_id='glue_transform_danawa',
+        job_name='danawa_json_to_parquet',
+        script_location='s3://de6-team8-bucket/glue/scripts/danawa/danawa_json_to_parquet.py',
+        iam_role_name='de6-team8-glue-role',
+        region_name='ap-northeast-2',
+        wait_for_completion=True
+    )
 
-copy_to_snowflake = SnowflakeOperator(
+    copy_to_snowflake = SnowflakeOperator(
         task_id='copy_to_snowflake',
         sql="""
             COPY INTO processed.danawa
@@ -178,7 +177,7 @@ copy_to_snowflake = SnowflakeOperator(
             MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
             PATTERN = '.*\\.parquet$';
         """,
-        snowflake_conn_id='team8_snowflake_conn',
+        snowflake_conn_id='team8_snowflake_conn'
     )
 
 crawl_task >> glue_task >> copy_to_snowflake
