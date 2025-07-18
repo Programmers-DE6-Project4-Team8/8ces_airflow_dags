@@ -52,7 +52,7 @@ with DAG(
         task_id='copy_to_snowflake',
         sql="""
             COPY INTO processed.naver
-            FROM @naver_stage/processed_data/naver/parquet/date={{ ds }}/
+            FROM @naver_stage/date={{ ds }}/
             FILE_FORMAT = (TYPE = PARQUET)
             MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
             PATTERN = '.*\\.parquet$';
