@@ -172,7 +172,7 @@ with DAG(
         task_id='copy_to_snowflake',
         sql="""
             COPY INTO processed.danawa
-            FROM @danawa_stage/processed_data/danawa/parquet/date={{ ds }}/
+            FROM @danawa_stage/date={{ ds }}/
             FILE_FORMAT = (TYPE = PARQUET)
             MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
             PATTERN = '.*\\.parquet$';
