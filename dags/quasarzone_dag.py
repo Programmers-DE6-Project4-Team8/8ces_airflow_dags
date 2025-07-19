@@ -1,8 +1,8 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.providers.amazon.aws.operators.glue import GlueJobOperator
-from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 from datetime import datetime, timedelta
 import pandas as pd
 import requests
@@ -127,18 +127,14 @@ def crawl_quasarzone_category(category, base_url):
     else:
         print("📭 신규 데이터 없음")
 
-# ✅ parquet 경로 삭제 함수
 def delete_existing_parquet_files(**kwargs):
+    import boto3
     date_str = datetime.today().strftime('%Y-%m-%d')
-    prefixes = [
-        f'processed_data/quasarzone/parquet/de6-team8-json-to-parquet-{date_str}/',
-        f'processed_data/quasarzone/parquet/de6-team8-cleaning-job-{date_str}/'
-    ]
+    prefix = f'processed_data/quasarzone/parquet/de6-team8-cleaning-job-{date_str}/'
     s3 = boto3.resource('s3')
     bucket = s3.Bucket('de6-team8-bucket')
-    for prefix in prefixes:
-        bucket.objects.filter(Prefix=prefix).delete()
-        print(f"🧹 삭제 완료: {prefix}")
+    bucket.objects.filter(Prefix=prefix).delete()
+    print(f"🧹 삭제 완료: {prefix}")
 
 # DAG 정의
 with DAG(
@@ -155,7 +151,7 @@ with DAG(
         python_callable=crawl_quasarzone_category,
         op_args=[
             "pc_hardware",
-            "https://quasarzone.com/bbs/qb_saleinfo?...page={}"
+            "https://quasarzone.com/bbs/qb_saleinfo?_method=post&_token=xxx&category=PC%2F%ED%95%98%EB%93%9C%EC%9B%A8%EC%96%B4&kind=subject&sort=num%2C+reply&direction=DESC&page={}"
         ]
     )
 
@@ -164,7 +160,7 @@ with DAG(
         python_callable=crawl_quasarzone_category,
         op_args=[
             "notebook_mobile",
-            "https://quasarzone.com/bbs/qb_saleinfo?...page={}"
+            "https://quasarzone.com/bbs/qb_saleinfo?_method=post&_token=xxx&category=%EB%85%B8%ED%8A%B8%EB%B6%81%2F%EB%AA%A8%EB%B0%94%EC%9D%BC&kind=subject&sort=num%2C+reply&direction=DESC&page={}"
         ]
     )
 
@@ -174,16 +170,16 @@ with DAG(
     )
 
     glue_json_to_parquet = GlueJobOperator(
-        task_id="glue_json_to_parquet",
-        job_name="de6-team8-json-to-parquet",
+        task_id="run_glue_json_to_parquet",
+        job_name="de6-team8-testjob",
         script_location="s3://de6-team8-bucket/glue/scripts/quasarzone/quasarzone_json_to_parquet.py",
         iam_role_name="de6-team8-glue-role",
         region_name="ap-northeast-2",
         wait_for_completion=True
     )
 
-    glue_clean_parquet = GlueJobOperator(
-        task_id="glue_clean_parquet",
+    glue_cleaning = GlueJobOperator(
+        task_id="run_glue_cleaning",
         job_name="de6-team8-cleaning-job",
         script_location="s3://de6-team8-bucket/glue/scripts/quasarzone/quasarzone_parquet_cleaning.py",
         iam_role_name="de6-team8-glue-role",
@@ -206,5 +202,5 @@ with DAG(
         snowflake_conn_id='team8_snowflake_conn',
     )
 
-    [task_pc_hardware, task_notebook_mobile] >> clear_s3_parquet
-    clear_s3_parquet >> glue_json_to_parquet >> glue_clean_parquet >> copy_to_snowflake
+    [task_pc_hardware, task_notebook_mobile] >> clear_s3_parquet >> glue_json_to_parquet >> glue_cleaning >> copy_to_snowflake
+
