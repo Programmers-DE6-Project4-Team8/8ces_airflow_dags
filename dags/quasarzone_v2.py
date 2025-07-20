@@ -52,7 +52,6 @@ def parse_date(created_at):
     else:
         raise ValueError(f"알 수 없는 날짜 형식: {created_at}")
 
-# ✅ title → product_name, platform 추출
 def extract_product_name_and_platform(title_text):
     platform_matches = re.findall(r"\[(.*?)\]", title_text)
     platform = ", ".join(platform_matches) if platform_matches else None
@@ -69,17 +68,12 @@ def get_hotdeal_summary(hotdeal):
     if not all([votes, title, price, views, created]):
         return None
 
-    title_text = title.text.strip()
-    product_name, platform = extract_product_name_and_platform(title_text)
-
     return {
         "votes": votes.text.strip(),
-        "title": title_text,
+        "title": title.text.strip(),
         "price": price.text.strip(),
         "views": parse_views(views.text.strip()),
         "created_at": parse_date(created.text.strip()),
-        "product_name": product_name,
-        "platform": platform
     }
 
 def scrap_hotdeal_info(soup, hotdeal_info, category_name):
@@ -125,9 +119,11 @@ def crawl_quasarzone_category(category, base_url):
     df = df.sort_values(by="created_at")
 
     if not df.empty:
+        # ✅ 전처리: product_name, platform 컬럼 추가
+        df['product_name'], df['platform'] = zip(*df['title'].apply(extract_product_name_and_platform))
+
         file_name = f"{today_str}.json"
         local_path = f"/tmp/{file_name}"
-
         df.to_json(local_path, orient="records", force_ascii=False, indent=2)
 
         s3 = S3Hook(aws_conn_id='aws_default')
@@ -140,7 +136,6 @@ def crawl_quasarzone_category(category, base_url):
         print("📭 신규 데이터 없음")
 
 def delete_existing_parquet_files(**kwargs):
-    import boto3
     date_str = datetime.today().strftime('%Y-%m-%d')
     prefix = f'processed_data/quasarzone/parquet/de6-team8-testjob-{date_str}/'
     s3 = boto3.resource('s3')
@@ -205,3 +200,4 @@ with DAG(
     )
 
     [task_pc_hardware, task_notebook_mobile] >> clear_s3_parquet >> glue_transform >> copy_to_snowflake
+
