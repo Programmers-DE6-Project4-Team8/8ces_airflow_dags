@@ -9,7 +9,6 @@ import requests
 from bs4 import BeautifulSoup as bs
 import time
 import re
-import boto3
 
 default_args = {
     'owner': 'airflow',
@@ -119,9 +118,7 @@ def crawl_quasarzone_category(category, base_url):
     df = df.sort_values(by="created_at")
 
     if not df.empty:
-        # ✅ 전처리: product_name, platform 컬럼 추가
         df['product_name'], df['platform'] = zip(*df['title'].apply(extract_product_name_and_platform))
-
         file_name = f"{today_str}.json"
         local_path = f"/tmp/{file_name}"
         df.to_json(local_path, orient="records", force_ascii=False, indent=2)
@@ -134,14 +131,6 @@ def crawl_quasarzone_category(category, base_url):
         print(f"🔁 총 수집 페이지: {page}")
     else:
         print("📭 신규 데이터 없음")
-
-def delete_existing_parquet_files(**kwargs):
-    date_str = datetime.today().strftime('%Y-%m-%d')
-    prefix = f'processed_data/quasarzone/parquet/de6-team8-testjob-{date_str}/'
-    s3 = boto3.resource('s3')
-    bucket = s3.Bucket('de6-team8-bucket')
-    bucket.objects.filter(Prefix=prefix).delete()
-    print(f"🧹 삭제 완료: {prefix}")
 
 with DAG(
     dag_id='quasarzone_v2',
@@ -170,11 +159,6 @@ with DAG(
         ]
     )
 
-    clear_s3_parquet = PythonOperator(
-        task_id='clear_s3_parquet_folder',
-        python_callable=delete_existing_parquet_files
-    )
-
     glue_transform = GlueJobOperator(
         task_id="run_glue_job",
         job_name="de6-team8-testjob",
@@ -199,5 +183,6 @@ with DAG(
         snowflake_conn_id='team8_snowflake_conn',
     )
 
-    [task_pc_hardware, task_notebook_mobile] >> clear_s3_parquet >> glue_transform >> copy_to_snowflake
+    [task_pc_hardware, task_notebook_mobile] >> glue_transform >> copy_to_snowflake
+
 
