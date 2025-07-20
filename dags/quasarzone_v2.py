@@ -4,12 +4,14 @@ from airflow.providers.amazon.aws.operators.glue import GlueJobOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 from datetime import datetime, timedelta
+import boto3
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup as bs
 import time
 import re
 
+# 기본 설정
 default_args = {
     'owner': 'airflow',
     'retries': 2,
@@ -86,7 +88,6 @@ def scrap_hotdeal_info(soup, hotdeal_info, category_name):
 def crawl_quasarzone_category(category, base_url):
     today_str = datetime.today().strftime("%Y-%m-%d")
     until_date = datetime(2024, 1, 1)
-
     page = 1
     hotdeal_info = []
     global YEAR, MONTH
@@ -104,12 +105,10 @@ def crawl_quasarzone_category(category, base_url):
             continue
 
         scrap_hotdeal_info(soup, hotdeal_info, category)
-
         last_scraped = datetime.strptime(hotdeal_info[-1]['created_at'], "%Y-%m-%d")
         if last_scraped < until_date:
             break
 
-        print(f"🌀 현재 페이지: {page}, 누적 수집 수: {len(hotdeal_info)}")
         page += 1
         time.sleep(1)
 
@@ -122,20 +121,14 @@ def crawl_quasarzone_category(category, base_url):
         file_name = f"{today_str}.json"
         local_path = f"/tmp/{file_name}"
         df.to_json(local_path, orient="records", force_ascii=False, indent=2)
-
         s3 = S3Hook(aws_conn_id='aws_default')
         s3_key = f"raw_data/quasarzone/{category}/{file_name}"
         s3.load_file(local_path, bucket_name="de6-team8-bucket", key=s3_key, replace=True)
 
-        print(f"✅ S3 업로드 완료: {s3_key}")
-        print(f"🔁 총 수집 페이지: {page}")
-    else:
-        print("📭 신규 데이터 없음")
-
 with DAG(
-    dag_id='quasarzone_v2',
+    dag_id='quasarzone_v2_final',
     default_args=default_args,
-    schedule_interval='@daily',
+    schedule_interval='0 9 * * *',
     start_date=datetime(2025, 7, 10),
     catchup=False,
     tags=['quasarzone', 'etl']
@@ -171,9 +164,6 @@ with DAG(
     copy_to_snowflake = SnowflakeOperator(
         task_id='copy_to_snowflake',
         sql="""
-        DELETE FROM processed.quasarzone
-        WHERE created_at = '{{ ds }}';
-
         COPY INTO processed.quasarzone
         FROM @quasarzone_stage/de6-team8-testjob-{{ ds }}/
         FILE_FORMAT = (TYPE = PARQUET)
@@ -184,5 +174,6 @@ with DAG(
     )
 
     [task_pc_hardware, task_notebook_mobile] >> glue_transform >> copy_to_snowflake
+
 
 
