@@ -9,6 +9,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
+import logging
 
 # 설정
 SEARCH_SITE = [
@@ -32,12 +33,18 @@ LOCAL_TMP_DIR = '/home/ec2-user/tmp'
 
 # 크롤링 및 S3 업로드
 def run_danawa_crawl(**context):
+    # 로그 포맷 설정 (Airflow 가 이미 세팅해 주지만, 추가 설정이 필요하다면 uncomment)
+    # logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+
     date_str = datetime.now().strftime('%Y-%m-%d')
     filename = f"danawa_{date_str}.json"
     os.makedirs(LOCAL_TMP_DIR, exist_ok=True)
     local_path = os.path.join(LOCAL_TMP_DIR, filename)
     s3_key = S3_KEY_TEMPLATE.format(date=date_str)
 
+    logging.info(f"크롤 시작: 날짜={date_str}, 저장파일={local_path}")
+
+    # Selenium WebDriver 초기화
     options = Options()
     options.add_argument('--headless')
     options.add_argument('--no-sandbox')
@@ -45,18 +52,30 @@ def run_danawa_crawl(**context):
     driver = webdriver.Chrome(options=options)
 
     records = []
-    for url in SEARCH_SITE:
+    total_sites = len(SEARCH_SITE)
+
+    for idx, url in enumerate(SEARCH_SITE, start=1):
+        logging.info(f"[사이트 {idx}/{total_sites}] URL: {url} 크롤링 시작")
         driver.get(url)
         driver.implicitly_wait(1)
-        # 인기순 정렬
-        driver.find_element(
-            By.CSS_SELECTOR,
-            "div.prod_list_opts ul.order_list li.order_item[data-sort-method='BoardCount']"
-        ).click()
-        time.sleep(2)
+
+        # 인기순 정렬 클릭
+        try:
+            driver.find_element(
+                By.CSS_SELECTOR,
+                "div.prod_list_opts ul.order_list li.order_item[data-sort-method='BoardCount']"
+            ).click()
+            time.sleep(2)
+            logging.info(f"[사이트 {idx}/{total_sites}] 인기순 정렬 적용 완료")
+        except Exception as e:
+            logging.warning(f"[사이트 {idx}/{total_sites}] 인기순 정렬 실패: {e}")
+
         page_num = 1
         while page_num <= 10:
+            logging.info(f"[사이트 {idx}/{total_sites}] 페이지 {page_num} 스크래핑 시작")
             soup = BeautifulSoup(driver.page_source, 'html.parser')
+            count_before = len(records)
+
             for prod in soup.select('div.prod_main_info'):
                 item = {}
                 # 제품명
@@ -71,19 +90,19 @@ def run_danawa_crawl(**context):
                 link_el = prod.select_one('div.thumb_image a')
                 if link_el and link_el.get('href'):
                     item['link'] = link_el['href']
-                # 가격 정보: 리스트로 수집 후 오름차순, 문자열로 저장
+                # 가격 정보
                 price_items = prod.select('div.prod_pricelist li')
                 prices = []
                 for price_el in price_items:
                     price_tag = price_el.select_one('p.price_sect a')
                     if price_tag and price_tag.text.strip():
-                        text = price_tag.text.replace(',','').replace('원','').strip()
+                        text = price_tag.text.replace(',', '').replace('원', '').strip()
                         if text.isdigit():
                             prices.append(int(text))
                 if prices:
-                    prices_sorted = sorted(prices)
-                    item['price_info'] = ','.join(str(p) for p in prices_sorted)
-                # 스펙: 실제 있는 key:value와 비콜론 없는 항목을 하나의 dict로 묶어 JSON 문자열로 저장
+                    records_sorted = sorted(prices)
+                    item['price_info'] = ','.join(str(p) for p in records_sorted)
+                # 스펙 정보
                 spec_el = prod.select_one('div.spec_list')
                 if spec_el and spec_el.text.strip():
                     parts = [p.strip() for p in spec_el.text.strip().split('/')]
@@ -97,41 +116,53 @@ def run_danawa_crawl(**context):
                             else:
                                 combined.append(part)
                     spec_dict = {}
-                    # 비콜론 없는 항목
                     non_colon = [c for c in combined if ':' not in c]
-                    for idx, val in enumerate(non_colon, start=1):
+                    for sidx, val in enumerate(non_colon, start=1):
                         if val:
-                            spec_dict[f'Spec_{idx}'] = val
-                    # key:value 항목
+                            spec_dict[f'Spec_{sidx}'] = val
                     for c in combined:
                         if ':' in c:
                             k, v = c.split(':', 1)
-                            k, v = k.strip(), v.strip()
-                            if v:
-                                spec_dict[k] = v
+                            if v.strip():
+                                spec_dict[k.strip()] = v.strip()
                     if spec_dict:
                         item['spec'] = json.dumps(spec_dict, ensure_ascii=False)
                 records.append(item)
-            # 10페이지 다 돌았으면 종료
+
+            count_after = len(records)
+            logging.info(f"[사이트 {idx}/{total_sites}] 페이지 {page_num} 완료: 누적 레코드 {count_after}개 (+{count_after - count_before})")
+
+            # 종료 조건
             if page_num == 10:
                 break
 
-            page_num+=1; time.sleep(2)
-            if page_num % 10 == 1:
-                driver.find_element(
-                    By.CSS_SELECTOR, '#productListArea > div.prod_num_nav > div > a').click()
-            else:
-                try:
-                    page_nums = driver.find_element(By.XPATH, '//*[@id="productListArea"]/div[4]/div')
+            page_num += 1
+            time.sleep(2)
+            # 페이지 네비게이션
+            try:
+                if page_num % 10 == 1:
+                    driver.find_element(By.CSS_SELECTOR,
+                        '#productListArea > div.prod_num_nav > div > a'
+                    ).click()
+                else:
+                    page_nums = driver.find_element(
+                        By.XPATH, '//*[@id="productListArea"]/div[4]/div'
+                    )
                     page_nums.find_element(By.LINK_TEXT, str(page_num)).click()
-                except:
-                    break
+                logging.info(f"[사이트 {idx}/{total_sites}] 페이지 {page_num} 네비게이션 완료")
+            except Exception as e:
+                logging.warning(f"[사이트 {idx}/{total_sites}] 페이지 {page_num} 네비게이션 실패: {e}")
+                break
+
+        logging.info(f"[사이트 {idx}/{total_sites}] URL: {url} 크롤링 완료")
 
     driver.quit()
+    logging.info(f"크롤러 종료: 최종 누적 레코드 {len(records)}개")
 
     # JSON 파일로 저장
     with open(local_path, 'w', encoding='utf-8') as f:
         json.dump(records, f, ensure_ascii=False, indent=2)
+    logging.info(f"로컬 파일 저장 완료: {local_path}")
 
     # S3 업로드
     hook = S3Hook(aws_conn_id='aws_default')
@@ -141,7 +172,118 @@ def run_danawa_crawl(**context):
         bucket_name=BUCKET_NAME,
         replace=True
     )
-    print(f"✅ Danawa data uploaded to s3://{BUCKET_NAME}/{s3_key}")
+    logging.info(f"S3 업로드 완료: s3://{BUCKET_NAME}/{s3_key}")
+# def run_danawa_crawl(**context):
+#     date_str = datetime.now().strftime('%Y-%m-%d')
+#     filename = f"danawa_{date_str}.json"
+#     os.makedirs(LOCAL_TMP_DIR, exist_ok=True)
+#     local_path = os.path.join(LOCAL_TMP_DIR, filename)
+#     s3_key = S3_KEY_TEMPLATE.format(date=date_str)
+
+#     options = Options()
+#     options.add_argument('--headless')
+#     options.add_argument('--no-sandbox')
+#     options.add_argument('--disable-dev-shm-usage')
+#     driver = webdriver.Chrome(options=options)
+
+#     records = []
+#     for url in SEARCH_SITE:
+#         driver.get(url)
+#         driver.implicitly_wait(1)
+#         # 인기순 정렬
+#         driver.find_element(
+#             By.CSS_SELECTOR,
+#             "div.prod_list_opts ul.order_list li.order_item[data-sort-method='BoardCount']"
+#         ).click()
+#         time.sleep(2)
+#         page_num = 1
+#         while page_num <= 10:
+#             soup = BeautifulSoup(driver.page_source, 'html.parser')
+#             for prod in soup.select('div.prod_main_info'):
+#                 item = {}
+#                 # 제품명
+#                 title_el = prod.select_one('p.prod_name a')
+#                 if title_el and title_el.text.strip():
+#                     item['title'] = title_el.text.strip()
+#                 # 출시일
+#                 rel_el = prod.select_one('div.prod_sub_info dd')
+#                 if rel_el and rel_el.text.strip():
+#                     item['release_date'] = rel_el.text.strip()[:-1]
+#                 # 링크
+#                 link_el = prod.select_one('div.thumb_image a')
+#                 if link_el and link_el.get('href'):
+#                     item['link'] = link_el['href']
+#                 # 가격 정보: 리스트로 수집 후 오름차순, 문자열로 저장
+#                 price_items = prod.select('div.prod_pricelist li')
+#                 prices = []
+#                 for price_el in price_items:
+#                     price_tag = price_el.select_one('p.price_sect a')
+#                     if price_tag and price_tag.text.strip():
+#                         text = price_tag.text.replace(',','').replace('원','').strip()
+#                         if text.isdigit():
+#                             prices.append(int(text))
+#                 if prices:
+#                     prices_sorted = sorted(prices)
+#                     item['price_info'] = ','.join(str(p) for p in prices_sorted)
+#                 # 스펙: 실제 있는 key:value와 비콜론 없는 항목을 하나의 dict로 묶어 JSON 문자열로 저장
+#                 spec_el = prod.select_one('div.spec_list')
+#                 if spec_el and spec_el.text.strip():
+#                     parts = [p.strip() for p in spec_el.text.strip().split('/')]
+#                     combined = []
+#                     for part in parts:
+#                         if ':' in part:
+#                             combined.append(part)
+#                         else:
+#                             if combined and ':' in combined[-1]:
+#                                 combined[-1] += '/' + part
+#                             else:
+#                                 combined.append(part)
+#                     spec_dict = {}
+#                     # 비콜론 없는 항목
+#                     non_colon = [c for c in combined if ':' not in c]
+#                     for idx, val in enumerate(non_colon, start=1):
+#                         if val:
+#                             spec_dict[f'Spec_{idx}'] = val
+#                     # key:value 항목
+#                     for c in combined:
+#                         if ':' in c:
+#                             k, v = c.split(':', 1)
+#                             k, v = k.strip(), v.strip()
+#                             if v:
+#                                 spec_dict[k] = v
+#                     if spec_dict:
+#                         item['spec'] = json.dumps(spec_dict, ensure_ascii=False)
+#                 records.append(item)
+#             # 10페이지 다 돌았으면 종료
+#             if page_num == 10:
+#                 break
+
+#             page_num+=1; time.sleep(2)
+#             if page_num % 10 == 1:
+#                 driver.find_element(
+#                     By.CSS_SELECTOR, '#productListArea > div.prod_num_nav > div > a').click()
+#             else:
+#                 try:
+#                     page_nums = driver.find_element(By.XPATH, '//*[@id="productListArea"]/div[4]/div')
+#                     page_nums.find_element(By.LINK_TEXT, str(page_num)).click()
+#                 except:
+#                     break
+
+#     driver.quit()
+
+#     # JSON 파일로 저장
+#     with open(local_path, 'w', encoding='utf-8') as f:
+#         json.dump(records, f, ensure_ascii=False, indent=2)
+
+#     # S3 업로드
+#     hook = S3Hook(aws_conn_id='aws_default')
+#     hook.load_file(
+#         filename=local_path,
+#         key=s3_key,
+#         bucket_name=BUCKET_NAME,
+#         replace=True
+#     )
+#     print(f"✅ Danawa data uploaded to s3://{BUCKET_NAME}/{s3_key}")
 
 # DAG 정의
 default_args = {
