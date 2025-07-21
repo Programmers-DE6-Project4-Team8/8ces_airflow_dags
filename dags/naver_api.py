@@ -68,7 +68,7 @@ with DAG(
                 t.$1:category2::STRING   AS category2,
                 t.$1:category3::STRING   AS category3,
                 t.$1:category4::STRING   AS category4
-              FROM @naver_stage/date='{{ ds }}'/ (
+              FROM @naver_stage/date={{ ds }}/ (
                   FILE_FORMAT => (TYPE => 'PARQUET'),
                   PATTERN     => '.*\\.parquet$'
               ) t
