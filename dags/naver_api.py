@@ -53,28 +53,44 @@ with DAG(
         sql="""
         MERGE INTO processed.naver AS target
         USING (
-          -- 스테이지에서 오늘 파일만 읽어와 JSON 필드를 컬럼으로 파싱
           SELECT
-            t.$1:col1::STRING      AS col1,
-            t.$1:col2::NUMBER      AS col2,
-            t.$1:title::STRING     AS title,
-            '{{ ds }}'             AS ingestion_date,
-            metadata$filename      AS src_file,
+            t.$1:title::STRING       AS title,
+            t.$1:link::STRING        AS link,
+            t.$1:image::STRING       AS image,
+            t.$1:lprice::STRING      AS lprice,
+            t.$1:hprice::STRING      AS hprice,
+            t.$1:mallName::STRING    AS mallName,
+            t.$1:productId::STRING   AS productId,
+            t.$1:productType::STRING AS productType,
+            t.$1:brand::STRING       AS brand,
+            t.$1:maker::STRING       AS maker,
+            t.$1:category1::STRING   AS category1,
+            t.$1:category2::STRING   AS category2,
+            t.$1:category3::STRING   AS category3,
+            t.$1:category4::STRING   AS category4,
             ROW_NUMBER() OVER (
               PARTITION BY t.$1:title::STRING
               ORDER BY metadata$filename
             ) AS rn
           FROM @naver_stage/date='{{ ds }}'/ (FILE_FORMAT => 'PARQUET') t
-        )
-        AS src
+        ) AS src
         ON target.title = src.title
-        -- 동일 title 이면서 가장 첫 번째(rn = 1) 레코드만 신규로 INSERT
         WHEN MATCHED AND src.rn = 1 THEN
-          -- 아무 작업도 하지 않음 (중복 덮어쓰기 방지)
+          -- 중복인 경우 아무 업데이트도 하지 않음
           UPDATE SET title = target.title
         WHEN NOT MATCHED AND src.rn = 1 THEN
-          INSERT (col1, col2, title, ingestion_date)
-          VALUES (src.col1, src.col2, src.title, src.ingestion_date);
+          INSERT (
+            title, link, image, lprice, hprice,
+            mallName, productId, productType,
+            brand, maker, category1, category2,
+            category3, category4
+          )
+          VALUES (
+            src.title, src.link, src.image, src.lprice, src.hprice,
+            src.mallName, src.productId, src.productType,
+            src.brand, src.maker, src.category1, src.category2,
+            src.category3, src.category4
+          );
         """,
         snowflake_conn_id='team8_snowflake_conn',
     )
