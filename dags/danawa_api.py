@@ -116,14 +116,14 @@ def run_danawa_crawl(**context):
             if page_num == 10:
                 break
 
-            page+=1; time.sleep(2)
-            if page % 10 == 1:
+            page_num+=1; time.sleep(2)
+            if page_num % 10 == 1:
                 driver.find_element(
                     By.CSS_SELECTOR, '#productListArea > div.prod_num_nav > div > a').click()
             else:
                 try:
                     page_nums = driver.find_element(By.XPATH, '//*[@id="productListArea"]/div[4]/div')
-                    page_nums.find_element(By.LINK_TEXT, str(page)).click()
+                    page_nums.find_element(By.LINK_TEXT, str(page_num)).click()
                 except:
                     break
 
