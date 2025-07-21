@@ -127,6 +127,14 @@ def run_danawa_crawl(**context):
                                 spec_dict[k.strip()] = v.strip()
                     if spec_dict:
                         item['spec'] = json.dumps(spec_dict, ensure_ascii=False)
+                img_el = prod.select_one('div.thumb_image img')
+                if img_el and img_el.get('src'):
+                    img_url = img_el['src']
+                    # protocol-relative URL 보정
+                    if img_url.startswith("//"):
+                        img_url = "https:" + img_url
+                    item['image'] = img_url
+                    logging.info(f"{img_url}")
                 records.append(item)
 
             count_after = len(records)
