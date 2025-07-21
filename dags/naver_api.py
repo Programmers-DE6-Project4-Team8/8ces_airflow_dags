@@ -70,7 +70,6 @@ with DAG(
                 t.$1:category4::STRING   AS category4
               FROM @naver_stage/date=2025-07-21/ (
                   FILE_FORMAT = (TYPE = PARQUET)
-                  PATTERN     = '.*\\.parquet$'
               ) t
             AS src
             ON target.title = src.title
