@@ -53,44 +53,7 @@ with DAG(
         sql="""
             MERGE INTO processed.naver AS target
                 USING (
-                  SELECT title,
-                        link,
-                        image,
-                        lprice,
-                        hprice,
-                        mallName,
-                        productId,
-                        productType,
-                        brand,
-                        maker,
-                        category1,
-                        category2,
-                        category3,
-                        category4
-                  FROM @naver_stage/date={{ ds }}/
-                    (
-                      FILE_FORMAT => naver_parquet_fmt
-                    )
-                ) AS source
-                (
-                  title,
-                  link,
-                  image,
-                  lprice,
-                  hprice,
-                  mallName,
-                  productId,
-                  productType,
-                  brand,
-                  maker,
-                  category1,
-                  category2,
-                  category3,
-                  category4
-                )
-                ON target.title = source.title
-                WHEN NOT MATCHED THEN
-                  INSERT (
+                  SELECT
                     title,
                     link,
                     image,
@@ -105,24 +68,19 @@ with DAG(
                     category2,
                     category3,
                     category4
-                  )
-                  VALUES (
-                    source.title,
-                    source.link,
-                    source.image,
-                    source.lprice,
-                    source.hprice,
-                    source.mallName,
-                    source.productId,
-                    source.productType,
-                    source.brand,
-                    source.maker,
-                    source.category1,
-                    source.category2,
-                    source.category3,
-                    source.category4
-                  )
-                ;
+                  FROM @naver_stage/date={{ ds }}/
+                    ( FILE_FORMAT => naver_parquet_fmt )
+                ) AS source
+                  ON target.title = source.title
+                WHEN NOT MATCHED THEN
+                  INSERT ( title, link, image, lprice, hprice, mallName,
+                           productId, productType, brand, maker,
+                           category1, category2, category3, category4 )
+                  VALUES ( source.title, source.link, source.image,
+                           source.lprice, source.hprice, source.mallName,
+                           source.productId, source.productType, source.brand,
+                           source.maker, source.category1, source.category2,
+                           source.category3, source.category4 );
         """,
         snowflake_conn_id='team8_snowflake_conn',
     )
