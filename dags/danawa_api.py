@@ -316,17 +316,52 @@ with DAG(
         region_name='ap-northeast-2',
         wait_for_completion=True
     )
-
-    copy_to_snowflake = SnowflakeOperator(
-        task_id='copy_to_snowflake',
+    
+    create_ext_table = SnowflakeOperator(
+        task_id='create_ext_table',
+        snowflake_conn_id='team8_snowflake_conn',
         sql="""
-            COPY INTO processed.danawa
-            FROM @danawa_stage/date={{ ds }}/
-            FILE_FORMAT = (TYPE = PARQUET)
-            MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
-            PATTERN = '.*\\.parquet$';
-        """,
-        snowflake_conn_id='team8_snowflake_conn'
+        CREATE OR REPLACE EXTERNAL TABLE ext_danawa_shopping (
+          title        STRING AS ( VALUE:"title"       ::STRING ),
+          link         STRING AS ( VALUE:"link"        ::STRING ),
+          release_date        STRING AS ( VALUE:"image"       ::STRING ),
+          spec       STRING AS ( VALUE:"lprice"      ::STRING ),
+          price_info       STRING AS ( VALUE:"hprice"      ::STRING )
+        )
+        WITH LOCATION = @danawa_stage/date={{ ds }}/
+        FILE_FORMAT = (TYPE = 'PARQUET')
+        AUTO_REFRESH = FALSE;
+        """
     )
 
-crawl_task >> glue_task >> copy_to_snowflake
+    merge_to_snowflake = SnowflakeOperator(
+        task_id='merge_to_snowflake',
+        snowflake_conn_id='team8_snowflake_conn',
+        sql="""
+        MERGE INTO processed.danawa AS target
+        USING ext_danawa_shopping AS source
+          ON target.title = source.title
+        WHEN NOT MATCHED THEN
+          INSERT (
+            title, link, release_date, spec, price_info
+          )
+          VALUES (
+            source.title, source.link, source.release_date,
+            source.spec, source.price_info
+          );
+        """
+    )
+    
+    # copy_to_snowflake = SnowflakeOperator(
+    #     task_id='copy_to_snowflake',
+    #     sql="""
+    #         COPY INTO processed.danawa
+    #         FROM @danawa_stage/date={{ ds }}/
+    #         FILE_FORMAT = (TYPE = PARQUET)
+    #         MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
+    #         PATTERN = '.*\\.parquet$';
+    #     """,
+    #     snowflake_conn_id='team8_snowflake_conn'
+    # )
+
+crawl_task >> glue_task >> create_ext_table >> merge_to_snowflake
