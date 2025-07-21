@@ -99,5 +99,5 @@ with DAG(
     )
 
     # 순서 지정
-    create_ext_table >> merge_to_snowflake
-    # lambda_crawl >> glue_transform >> copy_to_snowflake
+    
+    lambda_crawl >> glue_transform >> create_ext_table >> merge_to_snowflake
