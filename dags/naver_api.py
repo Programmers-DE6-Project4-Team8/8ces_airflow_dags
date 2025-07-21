@@ -20,33 +20,33 @@ with DAG(
     max_active_runs=1,
 ) as dag:
 
-    lambda_crawl = LambdaInvokeFunctionOperator(
-        task_id='lambda_crawl',
-        function_name='naver_shopping_crawler_lambda',
-        payload="""{
-            "categories": [
-                "CPU", "GPU", "RAM", "SSD", "HDD",
-                "메인보드", "파워서플라이",
-                "사무용 노트북", "게이밍 노트북",
-                "스마트폰", "태블릿", "이어폰"
-            ],
-            "bucket": "de6-team8-bucket",
-            "prefix": "raw_data/naver/",
-            "filename": "naver_{{ ds }}.json"
-        }""",
-        aws_conn_id='aws_default',
-        log_type='Tail',
-        invocation_type='Event'
-    )
+    # lambda_crawl = LambdaInvokeFunctionOperator(
+    #     task_id='lambda_crawl',
+    #     function_name='naver_shopping_crawler_lambda',
+    #     payload="""{
+    #         "categories": [
+    #             "CPU", "GPU", "RAM", "SSD", "HDD",
+    #             "메인보드", "파워서플라이",
+    #             "사무용 노트북", "게이밍 노트북",
+    #             "스마트폰", "태블릿", "이어폰"
+    #         ],
+    #         "bucket": "de6-team8-bucket",
+    #         "prefix": "raw_data/naver/",
+    #         "filename": "naver_{{ ds }}.json"
+    #     }""",
+    #     aws_conn_id='aws_default',
+    #     log_type='Tail',
+    #     invocation_type='Event'
+    # )
 
-    glue_transform = GlueJobOperator(
-        task_id="glue_transform",
-        job_name="de6-team8-naver_json_to_parquet",
-        script_location="s3://de6-team8-bucket/glue/scripts/naver/naver_json_to_parquet.py",
-        iam_role_name="de6-team8-glue-role",
-        region_name="ap-northeast-2",
-        wait_for_completion=True
-    )
+    # glue_transform = GlueJobOperator(
+    #     task_id="glue_transform",
+    #     job_name="de6-team8-naver_json_to_parquet",
+    #     script_location="s3://de6-team8-bucket/glue/scripts/naver/naver_json_to_parquet.py",
+    #     iam_role_name="de6-team8-glue-role",
+    #     region_name="ap-northeast-2",
+    #     wait_for_completion=True
+    # )
 
     copy_to_snowflake = SnowflakeOperator(
         task_id='copy_to_snowflake',
