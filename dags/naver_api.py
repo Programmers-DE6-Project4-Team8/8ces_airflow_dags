@@ -54,33 +54,43 @@ with DAG(
             MERGE INTO processed.naver AS target
                 USING (
                   SELECT
-                    title,
-                    link,
-                    image,
-                    lprice,
-                    hprice,
-                    mallName,
-                    productId,
-                    productType,
-                    brand,
-                    maker,
-                    category1,
-                    category2,
-                    category3,
-                    category4
+                    t.$1,  t.$2,  t.$3,  t.$4,
+                    t.$5,  t.$6,  t.$7,  t.$8,
+                    t.$9,  t.$10, t.$11, t.$12,
+                    t.$13, t.$14
                   FROM @naver_stage/date={{ ds }}/
                     ( FILE_FORMAT => naver_parquet_fmt )
-                ) AS source
+                  AS t
+                ) AS source (
+                  title,
+                  link,
+                  image,
+                  lprice,
+                  hprice,
+                  mallName,
+                  productId,
+                  productType,
+                  brand,
+                  maker,
+                  category1,
+                  category2,
+                  category3,
+                  category4
+                )
                   ON target.title = source.title
                 WHEN NOT MATCHED THEN
-                  INSERT ( title, link, image, lprice, hprice, mallName,
-                           productId, productType, brand, maker,
-                           category1, category2, category3, category4 )
-                  VALUES ( source.title, source.link, source.image,
-                           source.lprice, source.hprice, source.mallName,
-                           source.productId, source.productType, source.brand,
-                           source.maker, source.category1, source.category2,
-                           source.category3, source.category4 );
+                  INSERT (
+                    title, link, image, lprice, hprice, mallName,
+                    productId, productType, brand, maker,
+                    category1, category2, category3, category4
+                  )
+                  VALUES (
+                    source.title, source.link, source.image, source.lprice, source.hprice, source.mallName,
+                    source.productId, source.productType, source.brand, source.maker,
+                    source.category1, source.category2, source.category3, source.category4
+                  )
+                ;
+
         """,
         snowflake_conn_id='team8_snowflake_conn',
     )
