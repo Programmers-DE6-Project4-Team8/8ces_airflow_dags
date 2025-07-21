@@ -52,48 +52,42 @@ with DAG(
         task_id='copy_to_snowflake',
         sql="""
         MERGE INTO processed.naver AS target
-        USING (
-          SELECT
-            t.$1:title::STRING       AS title,
-            t.$1:link::STRING        AS link,
-            t.$1:image::STRING       AS image,
-            t.$1:lprice::STRING      AS lprice,
-            t.$1:hprice::STRING      AS hprice,
-            t.$1:mallName::STRING    AS mallName,
-            t.$1:productId::STRING   AS productId,
-            t.$1:productType::STRING AS productType,
-            t.$1:brand::STRING       AS brand,
-            t.$1:maker::STRING       AS maker,
-            t.$1:category1::STRING   AS category1,
-            t.$1:category2::STRING   AS category2,
-            t.$1:category3::STRING   AS category3,
-            t.$1:category4::STRING   AS category4,
-            ROW_NUMBER() OVER (
-              PARTITION BY t.$1:title::STRING
-              ORDER BY metadata$filename
-            ) AS rn
-          FROM @naver_stage/date={{ ds }}/ (  
-              FILE_FORMAT => (TYPE => 'PARQUET'),  
-              PATTERN     => '.*\\.parquet$' 
-            ) t
-        ) AS src
-        ON target.title = src.title
-        WHEN MATCHED AND src.rn = 1 THEN
-          -- 중복인 경우 아무 업데이트도 하지 않음
-          UPDATE SET title = target.title
-        WHEN NOT MATCHED AND src.rn = 1 THEN
-          INSERT (
-            title, link, image, lprice, hprice,
-            mallName, productId, productType,
-            brand, maker, category1, category2,
-            category3, category4
-          )
-          VALUES (
-            src.title, src.link, src.image, src.lprice, src.hprice,
-            src.mallName, src.productId, src.productType,
-            src.brand, src.maker, src.category1, src.category2,
-            src.category3, src.category4
-          );
+            USING (
+              SELECT
+                t.$1:title::STRING       AS title,
+                t.$1:link::STRING        AS link,
+                t.$1:image::STRING       AS image,
+                t.$1:lprice::STRING      AS lprice,
+                t.$1:hprice::STRING      AS hprice,
+                t.$1:mallName::STRING    AS mallName,
+                t.$1:productId::STRING   AS productId,
+                t.$1:productType::STRING AS productType,
+                t.$1:brand::STRING       AS brand,
+                t.$1:maker::STRING       AS maker,
+                t.$1:category1::STRING   AS category1,
+                t.$1:category2::STRING   AS category2,
+                t.$1:category3::STRING   AS category3,
+                t.$1:category4::STRING   AS category4
+              FROM @naver_stage/date='{{ ds }}'/ (
+                  FILE_FORMAT => (TYPE => 'PARQUET'),
+                  PATTERN     => '.*\\.parquet$'
+              ) t
+            ) AS src
+            ON target.title = src.title
+               AND target.link  = src.link
+            WHEN NOT MATCHED THEN
+              INSERT (
+                title, link, image, lprice, hprice,
+                mallName, productId, productType,
+                brand, maker, category1, category2,
+                category3, category4
+              )
+              VALUES (
+                src.title, src.link, src.image, src.lprice, src.hprice,
+                src.mallName, src.productId, src.productType,
+                src.brand, src.maker, src.category1, src.category2,
+                src.category3, src.category4
+              );
         """,
         snowflake_conn_id='team8_snowflake_conn',
     )
