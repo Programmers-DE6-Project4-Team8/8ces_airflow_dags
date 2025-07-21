@@ -73,9 +73,20 @@ def run_danawa_crawl(**context):
         page_num = 1
         while page_num <= 10:
             logging.info(f"[사이트 {idx}/{total_sites}] 페이지 {page_num} 스크래핑 시작")
+            # soup = BeautifulSoup(driver.page_source, 'html.parser')
+            # count_before = len(records)
+            
+            # 1) 페이지 끝까지 스크롤 다운
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(1)
+            # 2) 각 제품 요소까지 개별 스크롤
+            elems = driver.find_elements(By.CSS_SELECTOR, "div.prod_main_info")
+            for el in elems:
+                driver.execute_script("arguments[0].scrollIntoView(true);", el)
+                time.sleep(0.1)
+
             soup = BeautifulSoup(driver.page_source, 'html.parser')
             count_before = len(records)
-
             for prod in soup.select('div.prod_main_info'):
                 item = {}
                 # 제품명
