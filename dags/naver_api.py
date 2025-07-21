@@ -59,7 +59,10 @@ with DAG(
                     t.$9,  t.$10, t.$11, t.$12,
                     t.$13, t.$14
                   FROM @naver_stage/date={{ ds }}/
-                    ( FILE_FORMAT => naver_parquet_fmt )
+                    ( 
+                        FILE_FORMAT => naver_parquet_fmt,
+                        MATCH_BY_COLUMN_NAME   => 'CASE_INSENSITIVE'
+                    )
                   AS t
                 ) AS source (
                   title,
