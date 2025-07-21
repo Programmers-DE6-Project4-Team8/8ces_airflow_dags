@@ -51,6 +51,24 @@ with DAG(
     copy_to_snowflake = SnowflakeOperator(
         task_id='copy_to_snowflake',
         sql="""
+            CREATE OR REPLACE EXTERNAL TABLE ext_naver_shopping (
+                  title        STRING,
+                  link         STRING,
+                  image        STRING,
+                  lprice       STRING,
+                  hprice       STRING,
+                  mallName     STRING,
+                  productId    STRING,
+                  productType  STRING,
+                  brand        STRING,
+                  maker        STRING,
+                  category1    STRING,
+                  category2    STRING,
+                  category3    STRING,
+                  category4    STRING
+                )
+                WITH LOCATION=@naver_stage/date={{ ds }}/
+                FILE_FORMAT=(TYPE='PARQUET');
             MERGE INTO processed.naver AS target
                 USING (
                   SELECT
