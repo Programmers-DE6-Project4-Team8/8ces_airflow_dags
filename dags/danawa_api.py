@@ -145,7 +145,7 @@ def run_danawa_crawl(**context):
                     if img_url.startswith("//"):
                         img_url = "https:" + img_url
                     item['image'] = img_url
-                    logging.info(f"{img_url}")
+                    # logging.info(f"{img_url}")
                 records.append(item)
 
             count_after = len(records)
