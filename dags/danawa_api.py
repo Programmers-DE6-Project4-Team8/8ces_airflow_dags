@@ -144,7 +144,7 @@ def run_danawa_crawl(**context):
                     # protocol-relative URL 보정
                     if img_url.startswith("//"):
                         img_url = "https:" + img_url
-                    item['image'] = img_url
+                    item['image_link'] = img_url
                     # logging.info(f"{img_url}")
                 records.append(item)
 
