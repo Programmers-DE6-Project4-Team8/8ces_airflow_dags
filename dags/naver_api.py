@@ -72,7 +72,10 @@ with DAG(
               PARTITION BY t.$1:title::STRING
               ORDER BY metadata$filename
             ) AS rn
-          FROM @naver_stage/date={{ ds }}/ (FILE_FORMAT => 'PARQUET') t
+          FROM @naver_stage/date={{ ds }}/ (  
+              FILE_FORMAT => (TYPE => 'PARQUET'),  
+              PATTERN     => '.*\.parquet$'  
+            ) t
         ) AS src
         ON target.title = src.title
         WHEN MATCHED AND src.rn = 1 THEN
