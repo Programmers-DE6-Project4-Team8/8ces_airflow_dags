@@ -53,7 +53,20 @@ with DAG(
         sql="""
             MERGE INTO processed.naver AS target
                 USING (
-                  SELECT *
+                  SELECT title,
+                        link,
+                        image,
+                        lprice,
+                        hprice,
+                        mallName,
+                        productId,
+                        productType,
+                        brand,
+                        maker,
+                        category1,
+                        category2,
+                        category3,
+                        category4
                   FROM @naver_stage/date={{ ds }}/
                     (
                       FILE_FORMAT => naver_parquet_fmt
