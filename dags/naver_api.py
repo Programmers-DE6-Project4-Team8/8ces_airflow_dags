@@ -56,9 +56,9 @@ with DAG(
                   SELECT *
                   FROM @naver_stage/date={{ ds }}/
                     (
-                      FILE_FORMAT          => (TYPE              => PARQUET),
-                      MATCH_BY_COLUMN_NAME => CASE_INSENSITIVE,
-                      PATTERN              => '.*\.parquet$'
+                      FILE_FORMAT          = (TYPE              = PARQUET),
+                      MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE,
+                      PATTERN              = '.*\.parquet$'
                     )
                 ) AS source
                 (
