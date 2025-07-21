@@ -55,7 +55,8 @@ with DAG(
             FROM @naver_stage/date={{ ds }}/
             FILE_FORMAT = (TYPE = PARQUET)
             MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
-            PATTERN = '.*\\.parquet$';
+            PATTERN = '.*\\.parquet$'
+            FORCE = FALSE;
         """,
         snowflake_conn_id='team8_snowflake_conn',
     )
