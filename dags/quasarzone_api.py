@@ -161,19 +161,38 @@ with DAG(
         wait_for_completion=True
     )
 
+     # ① processed.quasarzone 테이블을 CREATE OR REPLACE
+    create_processed_table = SnowflakeOperator(
+        task_id='create_processed_quasarzone_table',
+        snowflake_conn_id='team8_snowflake_conn',
+        sql="""
+        CREATE OR REPLACE TABLE processed.quasarzone (
+            votes STRING,
+            title STRING,
+            price STRING,
+            views NUMBER,
+            created_at DATE,
+            category STRING,
+            product_name STRING,
+            platform STRING
+        );
+        """
+    )
+
+    # ② Parquet → Snowflake 로드
     copy_to_snowflake = SnowflakeOperator(
         task_id='copy_to_snowflake',
+        snowflake_conn_id='team8_snowflake_conn',
         sql="""
         COPY INTO processed.quasarzone
         FROM @quasarzone_stage/de6-team8-testjob-{{ ds }}/
         FILE_FORMAT = (TYPE = PARQUET)
         MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
         PATTERN = '.*\\.parquet$';
-        """,
-        snowflake_conn_id='team8_snowflake_conn',
+        """
     )
 
-    [task_pc_hardware, task_notebook_mobile] >> glue_transform >> copy_to_snowflake
+    [task_pc_hardware, task_notebook_mobile] >> glue_transform >> create_processed_quasarzone_table >> copy_to_snowflake
 
 
 
