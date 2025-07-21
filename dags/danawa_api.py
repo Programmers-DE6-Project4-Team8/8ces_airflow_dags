@@ -231,9 +231,9 @@ with DAG(
         CREATE OR REPLACE EXTERNAL TABLE ext_danawa_shopping (
           title        STRING AS ( VALUE:"title"       ::STRING ),
           link         STRING AS ( VALUE:"link"        ::STRING ),
-          release_date        STRING AS ( VALUE:"image"       ::STRING ),
-          spec       STRING AS ( VALUE:"lprice"      ::STRING ),
-          price_info       STRING AS ( VALUE:"hprice"      ::STRING ),
+          release_date        STRING AS ( VALUE:"release_date"       ::STRING ),
+          spec       STRING AS ( VALUE:"spec"      ::STRING ),
+          price_info       STRING AS ( VALUE:"price_info"      ::STRING ),
           image_link       STRING AS ( VALUE:"image_link"          ::STRING)
         )
         WITH LOCATION = @danawa_stage/date={{ ds }}/
