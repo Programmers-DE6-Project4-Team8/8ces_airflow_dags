@@ -48,39 +48,56 @@ with DAG(
     #     wait_for_completion=True
     # )
 
-    copy_to_snowflake = SnowflakeOperator(
-        task_id='copy_to_snowflake',
-        sql="""
-            MERGE INTO processed.naver AS target
-                USING (
-                  SELECT
-                    v:"title"::STRING        AS title,
-                    v:"link"::STRING         AS link,
-                    v:"image"::STRING        AS image,
-                    v:"lprice"::STRING       AS lprice,
-                    v:"hprice"::STRING       AS hprice,
-                    v:"mallName"::STRING     AS mallName,
-                    v:"productId"::STRING    AS productId,
-                    v:"productType"::STRING  AS productType,
-                    v:"brand"::STRING        AS brand,
-                    v:"maker"::STRING        AS maker,
-                    v:"category1"::STRING    AS category1,
-                    v:"category2"::STRING    AS category2,
-                    v:"category3"::STRING    AS category3,
-                    v:"category4"::STRING    AS category4
-                  FROM (
-                    SELECT $1 AS v
-                    FROM @naver_stage/date={{ ds }}/ ( FILE_FORMAT => ( TYPE => 'PARQUET' ) )
-                  )
-                ) AS source
-                  ON target.title = source.title
-                WHEN NOT MATCHED THEN
-                  INSERT (title, link, image, …, category4)
-                  VALUES (source.title, source.link, source.image, …, source.category4)
-                ;
-        """,
+    create_ext_table = SnowflakeOperator(
+        task_id='create_ext_table',
         snowflake_conn_id='team8_snowflake_conn',
+        sql="""
+        CREATE OR REPLACE EXTERNAL TABLE ext_naver_shopping (
+          title        STRING AS ( VALUE:"title"       ::STRING ),
+          link         STRING AS ( VALUE:"link"        ::STRING ),
+          image        STRING AS ( VALUE:"image"       ::STRING ),
+          lprice       STRING AS ( VALUE:"lprice"      ::STRING ),
+          hprice       STRING AS ( VALUE:"hprice"      ::STRING ),
+          mallName     STRING AS ( VALUE:"mallName"    ::STRING ),
+          productId    STRING AS ( VALUE:"productId"   ::STRING ),
+          productType  STRING AS ( VALUE:"productType" ::STRING ),
+          brand        STRING AS ( VALUE:"brand"       ::STRING ),
+          maker        STRING AS ( VALUE:"maker"       ::STRING ),
+          category1    STRING AS ( VALUE:"category1"   ::STRING ),
+          category2    STRING AS ( VALUE:"category2"   ::STRING ),
+          category3    STRING AS ( VALUE:"category3"   ::STRING ),
+          category4    STRING AS ( VALUE:"category4"   ::STRING )
+        )
+        WITH LOCATION = @naver_stage/date={{ ds }}/
+        FILE_FORMAT = (TYPE = 'PARQUET')
+        AUTO_REFRESH = FALSE;
+        """
     )
 
+    # 2) 외부 테이블을 대상으로 MERGE 수행
+    merge_to_snowflake = SnowflakeOperator(
+        task_id='merge_to_snowflake',
+        snowflake_conn_id='team8_snowflake_conn',
+        sql="""
+        MERGE INTO processed.naver AS target
+        USING ext_naver_shopping AS source
+          ON target.title = source.title
+        WHEN NOT MATCHED THEN
+          INSERT (
+            title, link, image, lprice, hprice, mallName,
+            productId, productType, brand, maker,
+            category1, category2, category3, category4
+          )
+          VALUES (
+            source.title, source.link, source.image,
+            source.lprice, source.hprice, source.mallName,
+            source.productId, source.productType, source.brand,
+            source.maker, source.category1, source.category2,
+            source.category3, source.category4
+          );
+        """
+    )
+
+    # 순서 지정
+    create_ext_table >> merge_to_snowflake
     # lambda_crawl >> glue_transform >> copy_to_snowflake
-    copy_to_snowflake
