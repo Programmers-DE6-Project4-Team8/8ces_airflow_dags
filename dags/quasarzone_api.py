@@ -4,17 +4,14 @@ from airflow.providers.amazon.aws.operators.glue import GlueJobOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 from datetime import datetime, timedelta
+import boto3
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup as bs
 import time
-import os
 import re
-import json
 
-# ─────────────────────────────
-# DAG 기본 설정
-# ─────────────────────────────
+# 기본 설정
 default_args = {
     'owner': 'airflow',
     'retries': 2,
@@ -24,9 +21,6 @@ default_args = {
 YEAR = datetime.today().year
 MONTH = datetime.today().month
 
-# ─────────────────────────────
-# 공통 유틸
-# ─────────────────────────────
 def get_soup_from_page_with(url):
     headers = {'User-Agent': 'Mozilla/5.0'}
     res = requests.get(url, headers=headers)
@@ -59,6 +53,12 @@ def parse_date(created_at):
     else:
         raise ValueError(f"알 수 없는 날짜 형식: {created_at}")
 
+def extract_product_name_and_platform(title_text):
+    platform_matches = re.findall(r"\[(.*?)\]", title_text)
+    platform = ", ".join(platform_matches) if platform_matches else None
+    title_cleaned = re.sub(r"[\[\(].*?[\]\)]", "", title_text).strip()
+    return title_cleaned, platform
+
 def get_hotdeal_summary(hotdeal):
     votes = hotdeal.select_one("td > span.num.num")
     title = hotdeal.select_one("a.subject-link span.ellipsis-with-reply-cnt")
@@ -74,7 +74,7 @@ def get_hotdeal_summary(hotdeal):
         "title": title.text.strip(),
         "price": price.text.strip(),
         "views": parse_views(views.text.strip()),
-        "created_at": parse_date(created.text.strip())
+        "created_at": parse_date(created.text.strip()),
     }
 
 def scrap_hotdeal_info(soup, hotdeal_info, category_name):
@@ -85,13 +85,9 @@ def scrap_hotdeal_info(soup, hotdeal_info, category_name):
             summary["category"] = category_name
             hotdeal_info.append(summary)
 
-# ─────────────────────────────
-# 크롤링 Task
-# ─────────────────────────────
 def crawl_quasarzone_category(category, base_url):
     today_str = datetime.today().strftime("%Y-%m-%d")
     until_date = datetime(2024, 1, 1)
-
     page = 1
     hotdeal_info = []
     global YEAR, MONTH
@@ -109,12 +105,10 @@ def crawl_quasarzone_category(category, base_url):
             continue
 
         scrap_hotdeal_info(soup, hotdeal_info, category)
-
         last_scraped = datetime.strptime(hotdeal_info[-1]['created_at'], "%Y-%m-%d")
         if last_scraped < until_date:
             break
 
-        print(f"🌀 현재 페이지: {page}, 누적 수집 수: {len(hotdeal_info)}")
         page += 1
         time.sleep(1)
 
@@ -123,27 +117,18 @@ def crawl_quasarzone_category(category, base_url):
     df = df.sort_values(by="created_at")
 
     if not df.empty:
+        df['product_name'], df['platform'] = zip(*df['title'].apply(extract_product_name_and_platform))
         file_name = f"{today_str}.json"
         local_path = f"/tmp/{file_name}"
-
         df.to_json(local_path, orient="records", force_ascii=False, indent=2)
-
         s3 = S3Hook(aws_conn_id='aws_default')
         s3_key = f"raw_data/quasarzone/{category}/{file_name}"
         s3.load_file(local_path, bucket_name="de6-team8-bucket", key=s3_key, replace=True)
 
-        print(f"✅ S3 업로드 완료: {s3_key}")
-        print(f"🔁 총 수집 페이지: {page}")
-    else:
-        print("📭 신규 데이터 없음")
-
-# ─────────────────────────────
-# DAG 정의
-# ─────────────────────────────
 with DAG(
-    dag_id='quasarzone_etl',
+    dag_id='quasarzone_v2_final',
     default_args=default_args,
-    schedule_interval='@daily',
+    schedule_interval='0 9 * * *',
     start_date=datetime(2025, 7, 10),
     catchup=False,
     tags=['quasarzone', 'etl']
@@ -176,21 +161,19 @@ with DAG(
         wait_for_completion=True
     )
 
-    merge_into_snowflake = SnowflakeOperator(
-    task_id='merge_into_snowflake',
-    sql=f"""
-    MERGE INTO processed.quasarzone AS target
-    USING @quasarzone_stage/de6-team8-testjob-{datetime.today().strftime("%Y-%m-%d")}/ 
-      FILE_FORMAT = (TYPE = PARQUET)
-    ON target.title = source.title AND target.created_at = source.created_at
-    WHEN NOT MATCHED THEN
-      INSERT (votes, title, price, views, created_at, category)
-      VALUES (source.votes, source.title, source.price, source.views, source.created_at, source.category);
-    """,
-    snowflake_conn_id='team8_snowflake_conn',
-)
-    
-    
+    copy_to_snowflake = SnowflakeOperator(
+        task_id='copy_to_snowflake',
+        sql="""
+        COPY INTO processed.quasarzone
+        FROM @quasarzone_stage/de6-team8-testjob-{{ ds }}/
+        FILE_FORMAT = (TYPE = PARQUET)
+        MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
+        PATTERN = '.*\\.parquet$';
+        """,
+        snowflake_conn_id='team8_snowflake_conn',
+    )
+
+    [task_pc_hardware, task_notebook_mobile] >> glue_transform >> copy_to_snowflake
 
 
-    [task_pc_hardware, task_notebook_mobile] >> glue_transform >> merge_into_snowflake
+
