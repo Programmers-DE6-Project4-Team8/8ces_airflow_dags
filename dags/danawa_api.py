@@ -54,7 +54,8 @@ def run_danawa_crawl(**context):
             "div.prod_list_opts ul.order_list li.order_item[data-sort-method='BoardCount']"
         ).click()
         time.sleep(2)
-        while True:
+        page_num = 1
+        while page_num <= 10:
             soup = BeautifulSoup(driver.page_source, 'html.parser')
             for prod in soup.select('div.prod_main_info'):
                 item = {}
@@ -111,14 +112,20 @@ def run_danawa_crawl(**context):
                     if spec_dict:
                         item['spec'] = json.dumps(spec_dict, ensure_ascii=False)
                 records.append(item)
-            # 다음 페이지로 이동
-            try:
-                nav = driver.find_element(By.CSS_SELECTOR, '#productListArea .prod_num_nav')
-                next_btn = nav.find_element(By.CSS_SELECTOR, 'a.pg_next')
-                next_btn.click()
-                time.sleep(2)
-            except:
+            # 10페이지 다 돌았으면 종료
+            if page_num == 10:
                 break
+
+            page+=1; time.sleep(2)
+            if page % 10 == 1:
+                driver.find_element(
+                    By.CSS_SELECTOR, '#productListArea > div.prod_num_nav > div > a').click()
+            else:
+                try:
+                    page_nums = driver.find_element(By.XPATH, '//*[@id="productListArea"]/div[4]/div')
+                    page_nums.find_element(By.LINK_TEXT, str(page)).click()
+                except:
+                    break
 
     driver.quit()
 
