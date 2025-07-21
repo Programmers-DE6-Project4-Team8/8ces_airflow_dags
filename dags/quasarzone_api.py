@@ -130,6 +130,9 @@ def crawl_quasarzone_category(category, base_url):
     if not df.empty:
         # product_name, platform 컬럼 추가
         df['product_name'], df['platform'] = zip(*df['title'].apply(extract_product_name_and_platform))
+
+        # ✅ 여기서 플랫폼 필터 적용 (콤마, 공백 포함된 것 제외)
+        df = df[df['platform'].str.fullmatch(r'\S+')]
         file_name = f"{today_str}.json"
         local_path = f"/tmp/{file_name}"
         # JSON 저장 (image 포함)
