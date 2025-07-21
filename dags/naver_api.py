@@ -69,10 +69,10 @@ with DAG(
                 t.$1:category3::STRING   AS category3,
                 t.$1:category4::STRING   AS category4
               FROM @naver_stage/date=2025-07-21/ (
-                  FILE_FORMAT => (TYPE => 'PARQUET'),
-                  PATTERN     => '.*\\.parquet$'
+                  FILE_FORMAT = (TYPE => 'PARQUET'),
+                  PATTERN     = '.*\\.parquet$'
               ) t
-            ) AS src
+            AS src
             ON target.title = src.title
                AND target.link  = src.link
             WHEN NOT MATCHED THEN
@@ -92,4 +92,5 @@ with DAG(
         snowflake_conn_id='team8_snowflake_conn',
     )
 
-    lambda_crawl >> glue_transform >> copy_to_snowflake
+    #lambda_crawl >> glue_transform >> copy_to_snowflake
+    copy_to_snowflake
