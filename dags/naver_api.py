@@ -74,7 +74,7 @@ with DAG(
             ) AS rn
           FROM @naver_stage/date={{ ds }}/ (  
               FILE_FORMAT => (TYPE => 'PARQUET'),  
-              PATTERN     => '.*\.parquet$'  
+              PATTERN     => '.*\\.parquet$' 
             ) t
         ) AS src
         ON target.title = src.title
