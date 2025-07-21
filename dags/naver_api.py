@@ -51,12 +51,30 @@ with DAG(
     copy_to_snowflake = SnowflakeOperator(
         task_id='copy_to_snowflake',
         sql="""
-            COPY INTO processed.naver
-            FROM @naver_stage/date={{ ds }}/
-            FILE_FORMAT = (TYPE = PARQUET)
-            MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
-            PATTERN = '.*\\.parquet$'
-            FORCE = FALSE;
+        MERGE INTO processed.naver AS target
+        USING (
+          -- 스테이지에서 오늘 파일만 읽어와 JSON 필드를 컬럼으로 파싱
+          SELECT
+            t.$1:col1::STRING      AS col1,
+            t.$1:col2::NUMBER      AS col2,
+            t.$1:title::STRING     AS title,
+            '{{ ds }}'             AS ingestion_date,
+            metadata$filename      AS src_file,
+            ROW_NUMBER() OVER (
+              PARTITION BY t.$1:title::STRING
+              ORDER BY metadata$filename
+            ) AS rn
+          FROM @naver_stage/date='{{ ds }}'/ (FILE_FORMAT => 'PARQUET') t
+        )
+        AS src
+        ON target.title = src.title
+        -- 동일 title 이면서 가장 첫 번째(rn = 1) 레코드만 신규로 INSERT
+        WHEN MATCHED AND src.rn = 1 THEN
+          -- 아무 작업도 하지 않음 (중복 덮어쓰기 방지)
+          UPDATE SET title = target.title
+        WHEN NOT MATCHED AND src.rn = 1 THEN
+          INSERT (col1, col2, title, ingestion_date)
+          VALUES (src.col1, src.col2, src.title, src.ingestion_date);
         """,
         snowflake_conn_id='team8_snowflake_conn',
     )
