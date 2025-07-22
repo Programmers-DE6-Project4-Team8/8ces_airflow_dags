@@ -202,7 +202,7 @@ default_args = {
 }
 
 with DAG(
-    dag_id='danawa_crawl_and_clean',
+    dag_id='danawa_etl_pipeline',
     default_args=default_args,
     schedule_interval='@daily',
     catchup=False,
