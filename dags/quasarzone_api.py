@@ -146,7 +146,7 @@ def crawl_quasarzone_category(category, base_url):
         s3.load_file(local_path, bucket_name="de6-team8-bucket", key=s3_key, replace=True)
 
 with DAG(
-    dag_id='quasarzone_v2_final',
+    dag_id='quasarzone_etl_pipeline',
     default_args=default_args,
     schedule_interval='0 9 * * *',
     start_date=datetime(2025, 7, 10),
@@ -174,7 +174,7 @@ with DAG(
 
     glue_transform = GlueJobOperator(
         task_id="run_glue_job",
-        job_name="de6-team8-testjob",
+        job_name="de6-team8-quasarzone_json_to_parquet",
         script_location="s3://de6-team8-bucket/glue/scripts/quasarzone/quasarzone_json_to_parquet.py",
         iam_role_name="de6-team8-glue-role",
         region_name="ap-northeast-2",
