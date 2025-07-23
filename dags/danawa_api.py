@@ -210,19 +210,19 @@ with DAG(
     max_active_runs=1,
 ) as dag:
 
-    # crawl_task = PythonOperator(
-    #     task_id='crawl_and_upload_danawa',
-    #     python_callable=run_danawa_crawl
-    # )
+    crawl_task = PythonOperator(
+        task_id='crawl_and_upload_danawa',
+        python_callable=run_danawa_crawl
+    )
 
-    # glue_task = GlueJobOperator(
-    #     task_id='glue_transform_danawa',
-    #     job_name='danawa_json_to_parquet',
-    #     script_location='s3://de6-team8-bucket/glue/scripts/danawa/danawa_json_to_parquet.py',
-    #     iam_role_name='de6-team8-glue-role',
-    #     region_name='ap-northeast-2',
-    #     wait_for_completion=True
-    # )
+    glue_task = GlueJobOperator(
+        task_id='glue_transform_danawa',
+        job_name='danawa_json_to_parquet',
+        script_location='s3://de6-team8-bucket/glue/scripts/danawa/danawa_json_to_parquet.py',
+        iam_role_name='de6-team8-glue-role',
+        region_name='ap-northeast-2',
+        wait_for_completion=True
+    )
     
     create_ext_table = SnowflakeOperator(
         task_id='create_ext_table',
@@ -261,5 +261,5 @@ with DAG(
         """
     )
 
-# crawl_task >> glue_task >> create_ext_table >> merge_to_snowflake
-create_ext_table >> merge_to_snowflake
+crawl_task >> glue_task >> create_ext_table >> merge_to_snowflake
+# create_ext_table >> merge_to_snowflake
