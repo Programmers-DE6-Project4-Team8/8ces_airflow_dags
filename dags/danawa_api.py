@@ -219,23 +219,23 @@ with DAG(
     #     wait_for_completion=True
     # )
     
-    create_ext_table = SnowflakeOperator(
-        task_id='create_ext_table',
-        snowflake_conn_id='team8_snowflake_conn',
-        sql="""
-        CREATE OR REPLACE EXTERNAL TABLE ext_danawa_shopping (
-          title        STRING AS ( VALUE:"title"       ::STRING ),
-          link         STRING AS ( VALUE:"link"        ::STRING ),
-          release_date        STRING AS ( VALUE:"release_date"       ::STRING ),
-          spec       STRING AS ( VALUE:"spec"      ::STRING ),
-          price_info       STRING AS ( VALUE:"price_info"      ::STRING ),
-          image_link       STRING AS ( VALUE:"image_link"          ::STRING)
-        )
-        WITH LOCATION = @danawa_stage/date={{ ds }}/
-        FILE_FORMAT = (TYPE = 'PARQUET')
-        AUTO_REFRESH = FALSE;
-        """
-    )
+    # create_ext_table = SnowflakeOperator(
+    #     task_id='create_ext_table',
+    #     snowflake_conn_id='team8_snowflake_conn',
+    #     sql="""
+    #     CREATE OR REPLACE EXTERNAL TABLE ext_danawa_shopping (
+    #       title        STRING AS ( VALUE:"title"       ::STRING ),
+    #       link         STRING AS ( VALUE:"link"        ::STRING ),
+    #       release_date        STRING AS ( VALUE:"release_date"       ::STRING ),
+    #       spec       STRING AS ( VALUE:"spec"      ::STRING ),
+    #       price_info       STRING AS ( VALUE:"price_info"      ::STRING ),
+    #       image_link       STRING AS ( VALUE:"image_link"          ::STRING)
+    #     )
+    #     WITH LOCATION = @danawa_stage/date={{ ds }}/
+    #     FILE_FORMAT = (TYPE = 'PARQUET')
+    #     AUTO_REFRESH = FALSE;
+    #     """
+    # )
 
     merge_to_snowflake = SnowflakeOperator(
         task_id='merge_to_snowflake',
@@ -256,4 +256,4 @@ with DAG(
     )
 
 # crawl_task >> glue_task >> create_ext_table >> merge_to_snowflake
-create_ext_table >> merge_to_snowflake
+merge_to_snowflake
