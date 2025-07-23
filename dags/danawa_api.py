@@ -79,11 +79,6 @@ def run_danawa_crawl(**context):
             # 1) 페이지 끝까지 스크롤 다운
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             time.sleep(1)
-            # 2) 각 제품 요소까지 개별 스크롤
-            elems = driver.find_elements(By.CSS_SELECTOR, "div.prod_main_info")
-            for el in elems:
-                driver.execute_script("arguments[0].scrollIntoView(true);", el)
-                time.sleep(0.1)
 
             soup = BeautifulSoup(driver.page_source, 'html.parser')
             count_before = len(records)
