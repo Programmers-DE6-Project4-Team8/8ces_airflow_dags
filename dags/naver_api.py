@@ -48,31 +48,31 @@ with DAG(
         wait_for_completion=True
     )
 
-    create_ext_table = SnowflakeOperator(
-        task_id='create_ext_table',
-        snowflake_conn_id='team8_snowflake_conn',
-        sql="""
-        CREATE OR REPLACE EXTERNAL TABLE ext_naver_shopping (
-          title        STRING AS ( VALUE:"title"       ::STRING ),
-          link         STRING AS ( VALUE:"link"        ::STRING ),
-          image        STRING AS ( VALUE:"image"       ::STRING ),
-          lprice       STRING AS ( VALUE:"lprice"      ::STRING ),
-          hprice       STRING AS ( VALUE:"hprice"      ::STRING ),
-          mallName     STRING AS ( VALUE:"mallName"    ::STRING ),
-          productId    STRING AS ( VALUE:"productId"   ::STRING ),
-          productType  STRING AS ( VALUE:"productType" ::STRING ),
-          brand        STRING AS ( VALUE:"brand"       ::STRING ),
-          maker        STRING AS ( VALUE:"maker"       ::STRING ),
-          category1    STRING AS ( VALUE:"category1"   ::STRING ),
-          category2    STRING AS ( VALUE:"category2"   ::STRING ),
-          category3    STRING AS ( VALUE:"category3"   ::STRING ),
-          category4    STRING AS ( VALUE:"category4"   ::STRING )
-        )
-        WITH LOCATION = @naver_stage/date={{ ds }}/
-        FILE_FORMAT = (TYPE = 'PARQUET')
-        AUTO_REFRESH = FALSE;
-        """
-    )
+    # create_ext_table = SnowflakeOperator(
+    #     task_id='create_ext_table',
+    #     snowflake_conn_id='team8_snowflake_conn',
+    #     sql="""
+    #     CREATE OR REPLACE EXTERNAL TABLE ext_naver_shopping (
+    #       title        STRING AS ( VALUE:"title"       ::STRING ),
+    #       link         STRING AS ( VALUE:"link"        ::STRING ),
+    #       image        STRING AS ( VALUE:"image"       ::STRING ),
+    #       lprice       STRING AS ( VALUE:"lprice"      ::STRING ),
+    #       hprice       STRING AS ( VALUE:"hprice"      ::STRING ),
+    #       mallName     STRING AS ( VALUE:"mallName"    ::STRING ),
+    #       productId    STRING AS ( VALUE:"productId"   ::STRING ),
+    #       productType  STRING AS ( VALUE:"productType" ::STRING ),
+    #       brand        STRING AS ( VALUE:"brand"       ::STRING ),
+    #       maker        STRING AS ( VALUE:"maker"       ::STRING ),
+    #       category1    STRING AS ( VALUE:"category1"   ::STRING ),
+    #       category2    STRING AS ( VALUE:"category2"   ::STRING ),
+    #       category3    STRING AS ( VALUE:"category3"   ::STRING ),
+    #       category4    STRING AS ( VALUE:"category4"   ::STRING )
+    #     )
+    #     WITH LOCATION = @naver_stage/date={{ ds }}/
+    #     FILE_FORMAT = (TYPE = 'PARQUET')
+    #     AUTO_REFRESH = FALSE;
+    #     """
+    # )
 
     # 2) 외부 테이블을 대상으로 MERGE 수행
     merge_to_snowflake = SnowflakeOperator(
@@ -100,4 +100,4 @@ with DAG(
 
     # 순서 지정
     
-    lambda_crawl >> glue_transform >> create_ext_table >> merge_to_snowflake
+    lambda_crawl >> glue_transform >> merge_to_snowflake
